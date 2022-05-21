@@ -50,10 +50,15 @@ pip install -r requirements.txt
 ```
 
 Sign in https://flame.is.tue.mpg.de/login.php
+
 Go to https://flame.is.tue.mpg.de/download.php
+
 Download FLAME 2020 (fixed mouth, improved expressions, more data)
+
 Copy generic_model.pkl into TF_FLAME/models.
+
 Download http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
+
 Copy texture_data_256.npy into TF_FLAME/data.
 
 ## Setup score_face repository
