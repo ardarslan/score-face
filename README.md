@@ -1,6 +1,6 @@
 # Score-Face
 
-Face Reconstruction and Synthesis with Score-Based Generative Models
+Face Texture Reconstruction and Synthesis with Score-Based Generative Models
 
 ## Pull repositories
 
