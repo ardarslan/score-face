@@ -61,7 +61,7 @@ Download http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
 
 Copy texture_data_256.npy into TF_FLAME/data.
 
-## Setup score_face repository
+## Setup score-face repository
 
 Deactivate current environments.
 ```
@@ -70,10 +70,10 @@ conda deactivate
 deactivate
 ```
 
-Go into score_face directory.
+Go into score-face directory.
 ```
 cd
-cd score_face
+cd score-face
 conda env create -f environment.yml
 conda activate score_face
 mkdir -p exp/ve/ffhq_256_ncsnpp_continuous
