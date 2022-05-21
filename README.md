@@ -1,6 +1,10 @@
-# Use code-server on Euler with a GPU.
+# Score-Face
 
-# Pull this repository, TF_FLAME repository and mesh repository (mesh should be inside TF_FLAME directory).
+Face Reconstruction and Synthesis with Score-Based Generative Models
+
+## Pull repositories
+
+Pull this repository, TF_FLAME repository and mesh repository (mesh should be inside TF_FLAME directory).
 
 ```
 cd
@@ -10,7 +14,7 @@ cd TF_FLAME
 git clone https://github.com/MPI-IS/mesh.git
 ```
 
-# Setup mesh and TF_FLAME libraries.
+## Setup mesh and TF_FLAME repositories
 
 Deactivate current environments.
 ```
@@ -52,7 +56,7 @@ Copy generic_model.pkl into TF_FLAME/models.
 Download http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
 Copy texture_data_256.npy into TF_FLAME/data.
 
-# Setup score_face library.
+## Setup score_face repository
 
 Deactivate current environments.
 ```
@@ -71,7 +75,7 @@ mkdir -p exp/ve/ffhq_256_ncsnpp_continuous
 gdown 1-mtdSwuefIZA0n85QWScQo2WRvJNWwUy -O exp/ve/ffhq_256_ncsnpp_continuous/checkpoint_48.pth
 ```
 
-# Prepare data.
+## Prepare data
 
 Deactivate current environments.
 ```
@@ -111,6 +115,6 @@ source .virtualenvs/TF_FLAME/bin/activate
 bsub -n 4 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/resized/00009.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
 ```
 
-# Render a textured mesh
+## Render a textured mesh
 
-Currently in nbs/render_textured_mesh.ipynb
+Use nbs/render_textured_mesh.ipynb
