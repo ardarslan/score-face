@@ -15,7 +15,6 @@
 
 # pylint: skip-file
 """Return training and evaluation/test datasets from config files."""
-import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -81,9 +80,9 @@ def get_dataset(config, uniform_dequantization=False, evaluation=False):
   """
   # Compute batch size for this worker.
   batch_size = config.training.batch_size if not evaluation else config.eval.batch_size
-  if batch_size % jax.device_count() != 0:
+  if batch_size % 1 != 0:
     raise ValueError(f'Batch sizes ({batch_size} must be divided by'
-                     f'the number of devices ({jax.device_count()})')
+                     f'the number of devices (1)')
 
   # Reduce this when image resolution is too large and data pointer is stored
   shuffle_buffer_size = 10000

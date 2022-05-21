@@ -4,7 +4,7 @@ Face Texture Reconstruction and Synthesis with Score-Based Generative Models
 
 ## Pull repositories
 
-Pull this repository, TF_FLAME repository and mesh repository (mesh should be inside TF_FLAME directory).
+Pull score-face, TF_FLAME, and mesh repositories (mesh should be inside TF_FLAME directory).
 
 ```
 cd
@@ -120,6 +120,13 @@ source .virtualenvs/TF_FLAME/bin/activate
 bsub -n 4 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/resized/00009.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
 ```
 
-## Render a textured mesh
+## Render a textured mesh / Play with SDE notebook:
+
+Deactivate current environments.
+```
+conda deactivate
+conda deactivate
+deactivate
+```
 
 Use nbs/render_textured_mesh.ipynb
