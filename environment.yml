@@ -1,0 +1,35 @@
+name: score_face
+channels:
+  - pytorch
+  - anaconda
+  - conda-forge
+  - defaults
+  - pytorch3d
+dependencies:
+  - python=3.9.9
+  - pip=22.0.4
+  - tqdm=4.64.0
+  - pytorch3d=0.6.2
+  - pytorch=1.11.0
+  - matplotlib=3.5.1
+  - plotly=5.7.0
+  - black=22.3.0
+  - ipykernel=6.13.0
+  - pandas=1.4.2
+  - seaborn=0.11.2
+  - tqdm=4.64.0
+  - jax=0.3.13
+  - pip:
+    - tensorflow==2.5.0
+    - tensorboard==2.5.0
+    - tensorflow-addons==0.13.0
+    - tensorflow_probability==0.12.2
+    - opencv-python==4.5.5.64
+    - ml-collections==0.1.0
+    - tensorflow-gan==2.0.0
+    - tensorflow_datasets==3.1.0
+    - absl-py==0.10.0
+    - tensorflow_io==0.26.0
+    - torchvision==0.12.0
+    - ninja==1.10.2.3
+    - gdown==4.4.0
