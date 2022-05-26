@@ -9,7 +9,7 @@ Pull score-face, TF_FLAME, and mesh repositories (mesh should be inside TF_FLAME
 ```
 cd
 git clone https://github.com/ardarslan/score-face.git
-git clone https://github.com/TimoBolkart/TF_FLAME.git
+git clone https://github.com/ardarslan/TF_FLAME.git
 cd TF_FLAME
 git clone https://github.com/MPI-IS/mesh.git
 ```
@@ -38,14 +38,14 @@ source .virtualenvs/TF_FLAME/bin/activate
 
 Go into mesh directory, and install mesh.
 ```
+cd mesh
 pip install -U pip
 BOOST_INCLUDE_DIRS=/cluster/apps/gcc-6.3.0/boost-1.74.0-yl65iuwmyxsiyxehki4zjnued4nubqyn/include make all
 ```
 
-Go into TF_FLAME directory. Change chumpy version from 0.69 to 0.70. Delete ipython. Then install requirements.
+Go into TF_FLAME directory and install requirements.
 ```
 cd ..
------ Change chumpy version from 0.69 to 0.70. And delete ipython. -----
 pip install -r requirements.txt
 ```
 
@@ -117,7 +117,7 @@ module load gcc/6.3.0 boost/1.74.0 eth_proxy python_gpu/3.7.4
 cd
 cd TF_FLAME
 source .virtualenvs/TF_FLAME/bin/activate
-bsub -n 4 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/resized/00009.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
+bsub -n 2 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/raw/20705.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
 ```
 
 ## Render a textured mesh / Play with SDE notebook:
