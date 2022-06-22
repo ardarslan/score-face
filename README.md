@@ -117,7 +117,7 @@ module load gcc/6.3.0 boost/1.74.0 eth_proxy python_gpu/3.7.4
 cd
 cd TF_FLAME
 source .virtualenvs/TF_FLAME/bin/activate
-bsub -n 2 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/raw/20705.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
+bsub -n 2 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/raw/40044.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
 ```
 
 ## Render a textured mesh / Play with SDE notebook:
