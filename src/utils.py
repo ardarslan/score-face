@@ -36,13 +36,13 @@ def get_experiment_name():
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Arguments for running the script")
     parser.add_argument(
-        "--checkpoint_filepath", type=str, default="../exp/ve/ffhq_256_ncsnpp_continuous/checkpoint_48.pth"
+        "--checkpoint_filepath", type=str, default="exp/ve/ffhq_256_ncsnpp_continuous/checkpoint_48.pth"
     )
     parser.add_argument(
-        "--image_save_dir", type=str, default="../images"
+        "--image_save_dir", type=str, default="images"
     )
     parser.add_argument(
-        "--obj_path", type=str, default="../assets/40044.obj"
+        "--obj_path", type=str, default="assets/40044.obj"
     )
     parser.add_argument(
         "--image_size", type=int, default=256
@@ -57,19 +57,13 @@ def get_argument_parser():
         "--batch_size", type=int, default=1
     )
     parser.add_argument(
-        "--predict", type=str, default="never", choices=["never", "face_always", "face_once", "texture_and_background"]
-    )
-    parser.add_argument(
-        "--num_corrector_steps", type=int, default=6
+        "--num_corrector_steps", type=int, default=1
     )
     parser.add_argument(
         "--sampling_eps", type=float, default=1e-5
     )
     parser.add_argument(
         "--probability_flow", type=bool, default=False
-    )
-    parser.add_argument(
-        "--render_mode", type=str, default="3d_fixed_background", choices=["background", "2d", "3d", "2d_modified", "3d_fixed_background"]
     )
     parser.add_argument(
         "--cuda_device", type=int, default=0
@@ -84,27 +78,12 @@ def get_argument_parser():
         "--sde_T", type=int, default=1 # 1 
     )
     parser.add_argument(
-        "--sde_N", type=int, default=1000 # 2000 
+        "--sde_N", type=int, default=2000 # 2000 
     )
-    # parser.add_argument(
-    #     "--add_noise", type=str, default="texture_and_background", choices=["never", "face", "texture_and_background"]
-    # )
-    # parser.add_argument(
-    #     "--texture_snr", type=float, default=0.05
-    # )
-    # parser.add_argument(
-    #     "--background_snr", type=float, default=0.05
-    # )
-    # parser.add_argument(
-    #     "--texture_initial_noise_coefficient", type=float, default=300
-    # )
-    # parser.add_argument(
-    #     "--background_initial_noise_coefficient", type=float, default=300
-    # )
-    # parser.add_argument(
-    #     "--texture_noise_coefficient", type=float, default=300
-    # )
-    # parser.add_argument(
-    #     "--background_noise_coefficient", type=float, default=300
-    # )
+    parser.add_argument(
+        "--snr", type=float, default=0.075
+    )
+    parser.add_argument(
+        "--initial_noise_coefficient", type=float, default=348.0
+    )
     return parser

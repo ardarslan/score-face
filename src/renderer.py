@@ -54,7 +54,7 @@ class HardPhongShader(ShaderBase):
         pixel_colors = torch.where(mask, backgrounds, colors[..., 0, :])
         # Concat with the alpha channel.
         alpha = (~is_background).type_as(pixel_colors)[..., None]
-        return torch.cat([pixel_colors, alpha], dim=-1)  # (N, H, W, 4)
+        return torch.cat([pixel_colors, alpha], dim=-1)
 
     def forward(self, fragments: Fragments, meshes: Meshes, **kwargs) -> torch.Tensor:
         cameras = kwargs.get("cameras", self.cameras)
@@ -71,7 +71,7 @@ class HardPhongShader(ShaderBase):
             materials=materials,
         )
         images = self._hard_rgb_blend(colors, backgrounds, fragments)
-        return images
+        return images, fragments
 
 
 class Renderer(object):
@@ -80,19 +80,12 @@ class Renderer(object):
         self.raster_settings = RasterizationSettings(
             image_size=cfg["image_size"],
             blur_radius=0.0,
-            bin_size=0,
+            bin_size=0
         )
         obj_path = self.cfg["obj_path"]
         self.verts, self.faces, self.aux = load_obj(obj_path, device=self.cfg["device"])
         self.verts_uvs = self.aux.verts_uvs[None, ...]  # (1, V, 2)
         self.faces_uvs = self.faces.textures_idx[None, ...]  # (1, F, 3)
-
-        if self.cfg['render_mode'] in ["2d", "2d_modified", "background"]:
-            self.render = self._render_2d
-        elif self.cfg['render_mode'] in ["3d", "3d_fixed_background"]:
-            self.render = self._render_3d
-        else:
-            raise Exception(f"Not a valid render_mode {self.cfg['render_mode']}.")
     
     def get_random_elev_azimuth(self):
         if self.cfg["elev_azimuth_random"]:
@@ -103,95 +96,18 @@ class Renderer(object):
             azimuth = 0.0
         return elev, azimuth
     
-    def _get_foreground_mask(self, elev, azimuth):
-        cfg = self.cfg
-        texture = torch.ones(size=(cfg["batch_size"], cfg["num_channels"], cfg["texture_size"], cfg["texture_size"]), device=cfg["device"])
-        background = torch.zeros(size=(cfg["batch_size"], cfg["num_channels"], cfg["image_size"], cfg["image_size"]), device=cfg["device"])
-        face = self._render_3d(texture=texture, background=background, elev=elev, azimuth=azimuth, return_face_mean=True, j=None, rsde=None, vec_t=None, z=None, noise_face=None, step_size_face=None)
-        foreground_mask = (face > 0)
-        return foreground_mask
-    
-    def _predict_helper(self, face, rsde, vec_t, z):
-        f, G = rsde.discretize(face.detach(), vec_t)
-        face = face - f
-        face = face + G[:, None, None, None] * z
-        return face
-
-    def _predict(self, face, j, rsde, vec_t, z):
-        if self.cfg["predict"] == "face_once":
-            if j == self.cfg["num_corrector_steps"] - 1:
-                face = self._predict_helper(face, rsde, vec_t, z)
-                return face
-            else:
-                return face
-        elif self.cfg["predict"] == "face_always":
-            face = self._predict_helper(face, rsde, vec_t, z)
-            return face
-        elif self.cfg["predict"] in ["never", "texture_and_background"]:
-            return face
-        else:
-            raise Exception(f"Not a valid predict {self.cfg['predict']}.")
-    
-    def _add_noise(self, face, noise_face, step_size_face):
-        if self.cfg["add_noise"] == "face":
-            face = face + torch.sqrt(step_size_face * 2)[:, None, None, None] * noise_face * self.cfg["face_noise_coefficient"]
-            return face
-        else:
-            return face
-    
-    def _render_2d(self, texture, background, elev, azimuth, return_face_mean, j, rsde, vec_t, z, noise_face, step_size_face):
+    def render(self, texture, background, elev, azimuth):
         """
             Inputs:
                 texture: torch.tensor with shape (N, C, H, W)
                 background: torch.tensor with shape (N, C, H, W)
                 elev: float
                 azimuth: float
-                return_face_mean: bool
-                j: int
-                rsde: RSDE
-                vec_t : torch.Tensor
-                z: torch.Tensor
-                noise_face: torch.Tensor
-                step_size_face: torch.Tensor
             Outputs:
                 face: (N, C, H, W)
         """
-        foreground_mask = self._get_foreground_mask(elev, azimuth)
-        if self.cfg["render_mode"] == "background":
-            face = background
-        elif self.cfg["render_mode"] == "2d_modified":
-            face = torch.where(foreground_mask, texture * 100, background)
-        elif self.cfg["render_mode"] == "2d":
-            face = torch.where(foreground_mask, texture, background)
-        else:
-            raise Exception(f"Not a a valid render_mode {self.cfg['render_mode']}.")
-        
-        if return_face_mean:
-            return face
-        else:
-            face = self._predict(face, j, rsde, vec_t, z)
-            face = self._add_noise(face, noise_face, step_size_face)
-            return face
-
-    def _render_3d(self, texture, background, elev, azimuth, return_face_mean, j, rsde, vec_t, z, noise_face, step_size_face):
-        """
-            Inputs:
-                texture: torch.tensor with shape (N, C, H, W)
-                background: torch.tensor with shape (N, C, H, W)
-                elev: float
-                azimuth: float
-                return_face_mean: bool
-                j: int
-                rsde: RSDE
-                vec_t : torch.Tensor
-                z: torch.Tensor
-                noise_face: torch.Tensor
-                step_size_face: torch.Tensor
-            Outputs:
-                face: (N, C, H, W)
-        """
-        tex = Textures(verts_uvs=self.verts_uvs, faces_uvs=self.faces_uvs, maps=texture.permute(0, 2, 3, 1))
-        meshes = Meshes(verts=[self.verts], faces=[self.faces.verts_idx], textures=tex)
+        textures_uv = Textures(verts_uvs=self.verts_uvs, faces_uvs=self.faces_uvs, maps=texture.permute(0, 2, 3, 1))
+        meshes = Meshes(verts=[self.verts], faces=[self.faces.verts_idx], textures=textures_uv)
         verts_packed = meshes.verts_packed()
         center = verts_packed.mean(0)
         scale = max((verts_packed - center).abs().max(0)[0])
@@ -210,10 +126,6 @@ class Renderer(object):
                 backgrounds=background.permute(0, 2, 3, 1)
             )
         )
-        face = renderer(meshes)[:, :, :, :3].permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
-        if return_face_mean:
-            return face
-        else:
-            face = self._predict(face, j, rsde, vec_t, z)
-            face = self._add_noise(face, noise_face, step_size_face)
-            return face
+        face, fragments = renderer(meshes)
+        face = face[:, :, :, :3].permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+        return face, fragments, textures_uv

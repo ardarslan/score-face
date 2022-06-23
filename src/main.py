@@ -1,7 +1,8 @@
+import cv2
 import torch
-import itertools
-import functools
 from tqdm import tqdm
+import torch.nn.functional as F
+from pytorch3d.ops import interpolate_face_attributes
 
 from utils import (
     get_argument_parser,
@@ -13,20 +14,12 @@ from model_utils import (
     get_score_model,
     get_sde,
     get_score_fn,
-    get_grad_texture_and_background
 )
-from renderer import Renderer
 from visualization import save_images
-from random import shuffle
+from renderer import Renderer
 
 
 def main(cfg):
-    if cfg["predict"] == "texture_and_background" and cfg["render_mode"] == "3d":
-        raise Exception(f"Cannot predict 'texture_and_background' when render_mode is '3d'.")
-    
-    if cfg["add_noise"] == "face" and cfg["render_mode"] == "3d_fixed_background":
-        raise Exception(f"Cannot add noise to 'face' when render_mode is '3d_fixed_background'.")
-
     cfg["experiment_name"] = get_experiment_name()
     if torch.cuda.is_available():
         cfg["device"] = torch.device(f"cuda:{cfg['cuda_device']}")
@@ -41,20 +34,21 @@ def main(cfg):
     score_model = get_score_model(cfg)
     sde = get_sde()
     score_fn = get_score_fn(score_model=score_model, sde=sde)
-    renderer = Renderer(cfg)
+    renderer = Renderer(cfg=cfg)
 
     with torch.no_grad():
         image_shape = (cfg["batch_size"], cfg["num_channels"], cfg["image_size"], cfg["image_size"])
         texture_shape = (cfg["batch_size"], cfg["num_channels"], cfg["texture_size"], cfg["texture_size"])
 
-        texture = torch.randn(size=texture_shape, device=cfg["device"]) * cfg["texture_initial_noise_coefficient"]
-        if cfg["render_mode"] == "3d_fixed_background":
-            background = torch.zeros(size=image_shape, device=cfg["device"])
-        else:
-            background = torch.randn(size=image_shape, device=cfg["device"]) * cfg["background_initial_noise_coefficient"]
+        background = torch.zeros(size=image_shape, device=cfg["device"])
+        texture = torch.ones(size=texture_shape, device=cfg["device"])
         elev, azimuth = renderer.get_random_elev_azimuth()
-        face = renderer.render(texture=texture, background=background, elev=elev, azimuth=azimuth, return_face_mean=True, j=None, rsde=None, vec_t=None, z=None, noise_face=None, step_size_face=None)
-        render_func = functools.partial(renderer.render, elev=elev, azimuth=azimuth, return_face_mean=True, j=None, rsde=None, vec_t=None, z=None, noise_face=None, step_size_face=None)
+        face, fragments, textures_uv = renderer.render(texture=torch.randn(size=texture_shape, device=cfg["device"]),
+                                                       background=background,
+                                                       elev=elev,
+                                                       azimuth=azimuth)
+        is_background = (fragments.pix_to_face[..., 0] < 0)
+        face = torch.where(is_background, background, torch.randn(size=texture_shape, device=cfg["device"]) * cfg["initial_noise_coefficient"])
 
         timesteps = torch.linspace(cfg["sde_T"], cfg["sampling_eps"], cfg["sde_N"], device=cfg["device"])
         rsde = sde.reverse(score_fn, cfg["probability_flow"])
@@ -65,84 +59,100 @@ def main(cfg):
             vec_t = torch.ones(cfg["batch_size"], device=cfg["device"]) * t
             labels = sde.marginal_prob(torch.zeros(size=image_shape), vec_t)[1]
 
+            # update face
             for j in range(cfg["num_corrector_steps"]):
                 grad_face = score_model(face, labels)
-                grad_face_norm = torch.norm(grad_face.reshape(grad_face.shape[0], -1), dim=-1).mean()
                 noise_face = torch.randn(size=image_shape, device=cfg["device"])
+                grad_face_norm = torch.norm(grad_face.reshape(grad_face.shape[0], -1), dim=-1).mean()
                 noise_face_norm = torch.norm(noise_face.reshape(noise_face.shape[0], -1), dim=-1).mean()
-                step_size_face = (cfg["background_snr"] * noise_face_norm / grad_face_norm) ** 2 * 2 * alpha
+                step_size_face = (cfg["snr"] * noise_face_norm / grad_face_norm) ** 2 * 2 * alpha
+                face_mean = face + step_size_face[:, None, None, None] * grad_face
+                face = face_mean + torch.sqrt(step_size_face * 2)[:, None, None, None] * noise_face
+            f, G = rsde.discretize(face, vec_t)
+            z = torch.randn(size=image_shape, device=cfg["device"])
+            face_mean = face - f
+            face = face_mean + G[:, None, None, None] * z
 
-                grad_texture, grad_background = get_grad_texture_and_background(texture=texture, background=background, grad_face=grad_face, render_func=render_func)
+            # face = torch.tensor(cv2.resize(cv2.imread("../asd/40044.png")[:, :, [2, 1, 0]], (cfg["image_size"], cfg["image_size"]), interpolation=cv2.INTER_CUBIC), dtype=torch.float32, device=cfg["device"]).permute(2, 0, 1).unsqueeze(0) / 255.0
+            # print(face.shape)
+            face = renderer.render(texture=torch.tensor(cv2.imread("assets/40044.png")[:, :, [2, 1, 0]], dtype=torch.float32, device=cfg["device"]).permute(2, 0, 1).unsqueeze(0) / 255.0,
+                                   background=background,
+                                   elev=elev,
+                                   azimuth=azimuth)[0]
+            save_images(cfg, face, "face_initial", i)
 
-                grad_texture_norm = torch.norm(grad_texture.reshape(grad_texture.shape[0], -1), dim=-1).mean()
-                noise_texture = torch.randn(size=texture_shape, device=cfg["device"])
-                noise_texture_norm = torch.norm(noise_texture.reshape(noise_texture.shape[0], -1), dim=-1).mean()
-                step_size_texture = (cfg["texture_snr"] * noise_texture_norm / grad_texture_norm) ** 2 * 2 * alpha
-                texture_mean = texture + step_size_texture[:, None, None, None] * grad_texture
+            # update texture
+            packing_list = [
+                i[j] for i, j in zip(textures_uv.verts_uvs_list(), textures_uv.faces_uvs_list())
+            ]
+            faces_verts_uvs = torch.cat(packing_list)
 
-                if cfg["render_mode"] != "3d_fixed_background":
-                    grad_background_norm = torch.norm(grad_background.reshape(grad_background.shape[0], -1), dim=-1).mean()
-                    noise_background = torch.randn(size=image_shape, device=cfg["device"])
-                    noise_background_norm = torch.norm(noise_background.reshape(noise_background.shape[0], -1), dim=-1).mean()
-                    step_size_background = (cfg["background_snr"] * noise_background_norm / grad_background_norm) ** 2 * 2 * alpha
-                    background_mean = background + step_size_background[:, None, None, None] * grad_background
+            pixel_uvs = interpolate_face_attributes(
+                fragments.pix_to_face, fragments.bary_coords, faces_verts_uvs
+            )
 
-                    if cfg["add_noise"] in ["face", "never"]:
-                        background = background_mean
-                    elif cfg["add_noise"] == "texture_and_background":
-                        background = background_mean + torch.sqrt(step_size_background * 2)[:, None, None, None] * noise_background * cfg["background_noise_coefficient"]
-                    else:
-                        raise Exception(f"Not a valid add_noise {cfg['add_noise']}.")
-                
-                if cfg["add_noise"] in ["face", "never"]:
-                    texture = texture_mean
-                elif cfg["add_noise"] == "texture_and_background":
-                    texture = texture_mean + torch.sqrt(step_size_texture * 2)[:, None, None, None] * noise_texture * cfg["texture_noise_coefficient"]
-                else:
-                    raise Exception(f"Not a valid add_noise {cfg['add_noise']}.")
+            for sample_idx in range(cfg["batch_size"]):
+                for y in range(cfg["image_size"]):
+                    for x in range(cfg["image_size"]):
+                        v = int(cfg["texture_size"] - pixel_uvs[sample_idx, y, x, 0, 0] * 255 - 1)
+                        u = int(cfg["texture_size"] - pixel_uvs[sample_idx, y, x, 0, 1] * 255 - 1)
+                        texture[sample_idx, :, v, u] = face[sample_idx, :, y, x]
 
-                elev, azimuth = renderer.get_random_elev_azimuth()
-                z = torch.randn(size=image_shape, device=cfg["device"])
+            save_images(cfg, texture, "texture_initial", i)
 
-                if cfg["predict"] == "texture_and_background":
-                    f, G = rsde.discretize(face, vec_t)
-                    texture = texture - f
-                    texture = texture + G[:, None, None, None] * z
+            N, H_out, W_out, K = fragments.pix_to_face.shape
+            N, H_in, W_in, C = cfg["batch_size"], cfg["texture_size"], cfg["texture_size"], cfg["num_channels"]
 
-                    if cfg["render_mode"] != "3d_fixed_background":
-                        background = background - f
-                        background = background + G[:, None, None, None] * z
+            # pixel_uvs: (N, H, W, K, 2) -> (N, K, H, W, 2) -> (NK, H, W, 2)
+            pixel_uvs = pixel_uvs.permute(0, 3, 1, 2, 4).reshape(N * K, H_out, W_out, 2)
 
-                face = renderer.render(texture=texture, background=background, elev=elev, azimuth=azimuth, return_face_mean=False, j=j, rsde=rsde, vec_t=vec_t, z=z, noise_face=noise_face, step_size_face=step_size_face)
-                render_func = functools.partial(renderer.render, elev=elev, azimuth=azimuth, return_face_mean=False, j=j, rsde=rsde, vec_t=vec_t, z=z, noise_face=noise_face, step_size_face=step_size_face)
+            # textures.map:
+            #   (N, H, W, C) -> (N, C, H, W) -> (1, N, C, H, W)
+            #   -> expand (K, N, C, H, W) -> reshape (N*K, C, H, W)
+            texture_maps = (
+                texture[None, ...]
+                .expand(K, -1, -1, -1, -1)
+                .transpose(0, 1)
+                .reshape(N * K, C, H_in, W_in)
+            )
 
-            if (i + 1) % 10 == 0:
-                face = renderer.render(texture=texture, background=background, elev=elev, azimuth=azimuth, return_face_mean=True, j=None, rsde=None, vec_t=None, z=None, noise_face=None, step_size_face=None)
+            # Textures: (N*K, C, H, W), pixel_uvs: (N*K, H, W, 2)
+            # Now need to format the pixel uvs and the texture map correctly!
+            # From pytorch docs, grid_sample takes `grid` and `input`:
+            #   grid specifies the sampling pixel locations normalized by
+            #   the input spatial dimensions It should have most
+            #   values in the range of [-1, 1]. Values x = -1, y = -1
+            #   is the left-top pixel of input, and values x = 1, y = 1 is the
+            #   right-bottom pixel of input.
+
+            pixel_uvs = pixel_uvs * 2.0 - 1.0
+
+            texture_maps = torch.flip(texture_maps, [2])  # flip y axis of the texture map
+            if texture_maps.device != pixel_uvs.device:
+                texture_maps = texture_maps.to(pixel_uvs.device)
+            texels = F.grid_sample(
+                texture_maps,
+                pixel_uvs,
+                mode=textures_uv.sampling_mode,
+                align_corners=textures_uv.align_corners,
+                padding_mode=textures_uv.padding_mode,
+            )
+            # texels now has shape (NK, C, H_out, W_out)
+            texels = texels.reshape(N, K, C, H_out, W_out).permute(0, 3, 4, 1, 2)
+
+            save_images(cfg, texels[:, :, :, 0, :], "texels", i)
+            
+            elev, azimuth = renderer.get_random_elev_azimuth()
+            face, fragments, textures_uv = renderer.render(texture=texture,
+                                                           background=background,
+                                                           elev=elev,
+                                                           azimuth=azimuth)
+
+            if (i + 1) % 1 == 0:
                 save_images(cfg, face, "face", i)
                 save_images(cfg, texture, "texture", i)
                 save_images(cfg, background, "background", i)
 
-
 if __name__ == "__main__":
     cfg = get_argument_parser().parse_args().__dict__
-
-    cfg["add_noise"] = "texture_and_background"
-
-    cfg["background_noise_coefficient"] = 1
-    cfg["background_snr"] = 0.2
-    cfg["background_initial_noise_coefficient"] = 10
-
-    texture_noise_coefficients = [0.01, 0.05, 0.1, 0.5, 1.0]
-    texture_snrs = [0.01, 0.025, 0.05, 0.075, 0.1]
-    texture_initial_noise_coefficients = [0.01, 0.1, 1.0, 10, 100]
-
-    hyperparameters = list(itertools.product(texture_noise_coefficients, texture_snrs, texture_initial_noise_coefficients))
-    shuffle(hyperparameters)
-
-    for texture_noise_coefficient in texture_noise_coefficients:
-        for texture_snr in texture_snrs:
-            for texture_initial_noise_coefficient in texture_initial_noise_coefficients:
-                cfg["texture_noise_coefficient"] = texture_noise_coefficient
-                cfg["texture_snr"] = texture_snr
-                cfg["texture_initial_noise_coefficient"] = texture_initial_noise_coefficient
-                main(cfg)
+    main(cfg)
