@@ -1,132 +1,27 @@
-# Score-Face
-
-Face Texture Reconstruction and Synthesis with Score-Based Generative Models
-
-## Pull repositories
-
-Pull score-face, TF_FLAME, and mesh repositories (mesh should be inside TF_FLAME directory).
-
+Pull the repository.
 ```
-cd
 git clone https://github.com/ardarslan/score-face.git
-git clone https://github.com/ardarslan/TF_FLAME.git
-cd TF_FLAME
-git clone https://github.com/MPI-IS/mesh.git
 ```
 
-## Setup mesh and TF_FLAME repositories
-
-Deactivate current environments.
-```
-conda deactivate
-conda deactivate
-deactivate
+Download assets.zip, extract it to assets folder, put it in the main folder.
 ```
 
-Switch to new software stack. And load required modules.
-```
-env2lmod
-module load gcc/6.3.0 boost/1.74.0 eth_proxy python_gpu/3.7.4
 ```
 
-Go into TF_FLAME directory, and create a virtual environment, and activate it.
+Create conda environments.
 ```
-mkdir .virtualenvs
-python3 -m venv .virtualenvs/TF_FLAME
-source .virtualenvs/TF_FLAME/bin/activate
-```
-
-Go into mesh directory, and install mesh.
-```
-cd mesh
-pip install -U pip
-BOOST_INCLUDE_DIRS=/cluster/apps/gcc-6.3.0/boost-1.74.0-yl65iuwmyxsiyxehki4zjnued4nubqyn/include make all
+conda env create -f flame_environment.yml
+conda env create -f score_face_environment.yml
 ```
 
-Go into TF_FLAME directory and install requirements.
+Activate flame environment. Install mesh library. Set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION environment variable. Run TF_FLAME on an example image.
 ```
+conda env activate flame
+cd src/flame/mesh
+BOOST_INCLUDE_DIRS=/path/to/boost/include make all
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 cd ..
-pip install -r requirements.txt
+python3 fit_2D_landmarks.py --source_img_path ../../assets/40044.png
 ```
 
-Sign in https://flame.is.tue.mpg.de/login.php
-
-Go to https://flame.is.tue.mpg.de/download.php
-
-Download FLAME 2020 (fixed mouth, improved expressions, more data)
-
-Copy generic_model.pkl into TF_FLAME/models.
-
-Download http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
-
-Copy texture_data_256.npy into TF_FLAME/data.
-
-## Setup score-face repository
-
-Deactivate current environments.
-```
-conda deactivate
-conda deactivate
-deactivate
-```
-
-Go into score-face directory.
-```
-cd
-cd score-face
-conda env create -f environment.yml
-conda activate score_face
-mkdir -p exp/ve/ffhq_256_ncsnpp_continuous
-gdown 1-mtdSwuefIZA0n85QWScQo2WRvJNWwUy -O exp/ve/ffhq_256_ncsnpp_continuous/checkpoint_48.pth
-```
-
-## Prepare data
-
-Deactivate current environments.
-```
-conda deactivate
-conda deactivate
-deactivate
-```
-
-Activate score_face conda environment.
-```
-conda activate score_face
-```
-
-Untar the dataset.
-```
-mkdir -p /cluster/scratch/$(whoami)/FFHQ
-tar -C /cluster/scratch/$(whoami)/FFHQ -xvf /cluster/project/infk/hilliges/buehlmar/datasets/FFHQ/raw.tar
-```
-
-Resize images.
-```
-cd scripts
-python3 resize_ffhq_images.py --input_images_dir /cluster/scratch/$(whoami)/FFHQ/raw --output_images_dir /cluster/scratch/$(whoami)/FFHQ/resized --output_images_height 256 --output_images_width 256
-```
-
-Deactivate current environment.
-```
-conda deactivate
-```
-
-Execute the following lines. NOTE: Python file should be changed so that it extracts mesh and texture files for all images (not only a single one).
-```
-module load gcc/6.3.0 boost/1.74.0 eth_proxy python_gpu/3.7.4
-cd
-cd TF_FLAME
-source .virtualenvs/TF_FLAME/bin/activate
-bsub -n 2 -W 24:00 -R "rusage[mem=8192, ngpus_excl_p=1]" python fit_2D_landmarks.py --model_fname './models/generic_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_256.npy' --target_img_path '/cluster/scratch/aarslan/FFHQ/raw/40044.png' --out_path '/cluster/scratch/aarslan/FFHQ/mesh_and_texture' --visualize False
-```
-
-## Render a textured mesh / Play with SDE notebook:
-
-Deactivate current environments.
-```
-conda deactivate
-conda deactivate
-deactivate
-```
-
-Use nbs/render_textured_mesh.ipynb
+Go to nbs folder. Open main.ipynb. Choose score-face as the kernel. Run the notebook.

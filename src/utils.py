@@ -1,6 +1,6 @@
 import os
+import cv2
 import random
-import argparse
 import time
 import pprint
 from uuid import uuid4
@@ -33,57 +33,39 @@ def get_experiment_name():
     return f"{int(time.time())}_{uuid4().hex}"
 
 
-def get_argument_parser():
-    parser = argparse.ArgumentParser(description="Arguments for running the script")
-    parser.add_argument(
-        "--checkpoint_filepath", type=str, default="exp/ve/ffhq_256_ncsnpp_continuous/checkpoint_48.pth"
-    )
-    parser.add_argument(
-        "--image_save_dir", type=str, default="images"
-    )
-    parser.add_argument(
-        "--obj_path", type=str, default="assets/40044.obj"
-    )
-    parser.add_argument(
-        "--image_size", type=int, default=256
-    )
-    parser.add_argument(
-        "--texture_size", type=int, default=256
-    )
-    parser.add_argument(
-        "--num_channels", type=int, default=3
-    )
-    parser.add_argument(
-        "--batch_size", type=int, default=1
-    )
-    parser.add_argument(
-        "--num_corrector_steps", type=int, default=1
-    )
-    parser.add_argument(
-        "--sampling_eps", type=float, default=1e-5
-    )
-    parser.add_argument(
-        "--probability_flow", type=bool, default=False
-    )
-    parser.add_argument(
-        "--cuda_device", type=int, default=0
-    )
-    parser.add_argument(
-        "--elev_azimuth_random", type=bool, default=False
-    )
-    parser.add_argument(
-        "--seed", type=int, default=42
-    )
-    parser.add_argument(
-        "--sde_T", type=int, default=1 # 1 
-    )
-    parser.add_argument(
-        "--sde_N", type=int, default=2000 # 2000 
-    )
-    parser.add_argument(
-        "--snr", type=float, default=0.075
-    )
-    parser.add_argument(
-        "--initial_noise_coefficient", type=float, default=348.0
-    )
-    return parser
+def get_initial_texture(cfg):
+    initial_texture = cv2.imread(cfg["texture_path"])
+    gray = cv2.cvtColor(initial_texture, cv2.COLOR_BGR2GRAY)
+    black_mask = gray <= 0
+    black_mask_moved = np.vstack((np.zeros((1, black_mask.shape[1])), black_mask[:-1, :]))
+    black_mask = np.logical_or(black_mask, black_mask_moved)
+    black_mask = np.tile(black_mask[:, :, None], reps=[1, 1, 3])
+    initial_texture = np.clip(initial_texture / 255.0 + black_mask, 0, 1)[:, :, [2, 1, 0]]
+    initial_texture = cv2.resize(initial_texture, dsize=(cfg["texture_size"], cfg["texture_size"]), interpolation=cv2.INTER_NEAREST)
+    initial_texture = torch.tensor(initial_texture, device=cfg["device"], dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+    return initial_texture
+
+
+def get_target_background(cfg):
+    image_shape = (cfg["batch_size"], cfg["num_channels"], cfg["image_size"], cfg["image_size"])
+    target_background = torch.zeros(size=image_shape, device=cfg["device"]) # black
+    # target_background[:, 1, :, :] = target_background[:, 1, :, :] + 1
+    return target_background
+
+
+def update_texture(cfg, current_texture, pixel_uvs, current_optimized_face_mean, unfilled_mask, update_round):
+    pixel_uvs[:, :, :, 0] = torch.floor((pixel_uvs[:, :, :, 0] + 1) * cfg["texture_size"] / 2)
+    pixel_uvs[:, :, :, 1] = cfg["texture_size"] - 1 - torch.floor(cfg["texture_size"] * (pixel_uvs[:, :, :, 1] + 1) / 2)
+    current_optimized_face_mean = torch.clamp(current_optimized_face_mean, min=0.0, max=1.0)
+
+    for sample_idx in range(cfg["batch_size"]):
+        if update_round == 0:
+            gray = cv2.cvtColor(current_optimized_face_mean[sample_idx, :, :, :].permute(1, 2, 0).cpu().numpy(), cv2.COLOR_RGB2GRAY)
+        for y in range(cfg["image_size"]):
+            for x in range(cfg["image_size"]):
+                if unfilled_mask[sample_idx, 0, y, x] == 1:
+                    if (update_round == 0 and gray[y, x] > 0.2) or update_round == 1:
+                        u = int(pixel_uvs[sample_idx, y, x, 0])
+                        v = int(pixel_uvs[sample_idx, y, x, 1])
+                        current_texture[sample_idx, :, v, u] = current_optimized_face_mean[sample_idx, :, y, x]
+    return current_texture

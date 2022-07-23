@@ -1,4 +1,4 @@
-name: score_face
+name: score-face
 channels:
   - pytorch
   - anaconda
