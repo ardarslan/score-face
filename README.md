@@ -3,25 +3,22 @@ Pull the repository.
 git clone https://github.com/ardarslan/score-face.git
 ```
 
-Download assets.zip, extract it to assets folder, put it in the main folder.
+Create the conda environment and activate it.
+```
+cd score-face
+conda env create -f environment.yml
+conda activate score-face
 ```
 
+Create a folder named "assets" in the main directory of the repository. Download "checkpoint_48.pth" file in it.
+```
+mkdir assets
+cd assets
+gdown --id 1-mtdSwuefIZA0n85QWScQo2WRvJNWwUy
 ```
 
-Create conda environments.
+Run the code.
 ```
-conda env create -f flame_environment.yml
-conda env create -f score_face_environment.yml
+cd ../src
+python3 main.py
 ```
-
-Activate flame environment. Install mesh library. Set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION environment variable. Run TF_FLAME on an example image.
-```
-conda env activate flame
-cd src/flame/mesh
-BOOST_INCLUDE_DIRS=/path/to/boost/include make all
-export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
-cd ..
-python3 fit_2D_landmarks.py --source_img_path ../../assets/40044.png
-```
-
-Go to nbs folder. Open main.ipynb. Choose score-face as the kernel. Run the notebook.
