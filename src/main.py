@@ -19,7 +19,7 @@ cfg = {
     "num_corrector_steps": 1,
     "sde_N": 1000,
     "snr": 0.075,
-    "subject_id": 62138
+    "subject_id": 35298
 }
 cfg["experiment_name"] = get_experiment_name()
 cfg["texture_path"] = f"/local/home/aarslan/DECA/TestSamples/examples/results/{cfg['subject_id']}/{cfg['subject_id']}.png"
