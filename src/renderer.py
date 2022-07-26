@@ -28,6 +28,27 @@ class Renderer(object):
     def render_prerendering_results(self, texture, background, pixel_uvs, background_mask):
         texture_sampled = torch.nn.functional.grid_sample(torch.flip(texture, dims=[-2]), pixel_uvs, mode='nearest', padding_mode='border', align_corners=False)
         return torch.where(background_mask, background, texture_sampled)
+    
+    def is_any_neighbor_background(self, background_mask, sample_idx, y, x):
+        def find_indices(index, max_index):
+            if index == 0:
+                indices = [index, index + 1]
+            elif index == max_index:
+                indices = [index - 1, index]
+            else:
+                indices = [index - 1, index, index + 1]
+            return indices
+    
+        ys = find_indices(index=y, max_index=background_mask.shape[-2] - 1)
+        xs = find_indices(index=x, max_index=background_mask.shape[-1] - 1)
+
+        for current_y in ys:
+            for current_x in xs:
+                if current_y == y and current_x == x:
+                    continue
+                if background_mask[sample_idx, 0, current_y, current_x].sum() == 1:
+                    return True
+        return False
 
     def render(self, texture, background, elev, azimuth, result_keys):
         """
@@ -45,7 +66,7 @@ class Renderer(object):
         scale = max((verts_packed - center).abs().max(0)[0])
         meshes.offset_verts_(-center)
         meshes.scale_verts_((1.0 / float(scale)))
-        R, T = look_at_view_transform(1.2, elev, azimuth)
+        R, T = look_at_view_transform(1.2, elev, azimuth) # changed from 1.2
         cameras = FoVPerspectiveCameras(R=R, T=T, device=self.cfg["device"])
         rasterizer = MeshRasterizer(
             cameras=cameras,
@@ -69,12 +90,25 @@ class Renderer(object):
 
         face = self.render_prerendering_results(texture=texture, background=background, pixel_uvs=pixel_uvs, background_mask=background_mask)
 
+        # if "foreground_edges" in result_keys:
+        #     foreground_edges = torch.zeros_like(background_mask)
+        #     for sample_idx in range(background_mask.shape[0]):
+        #         for y in range(background_mask.shape[2]):
+        #             for x in range(background_mask.shape[3]):
+        #                 if background_mask[sample_idx, 0, y, x] == 0: # foreground pixel
+        #                     if self.is_any_neighbor_background(background_mask, sample_idx, y, x): # has a background neighbor
+        #                         foreground_edges[sample_idx, :, y, x] = True
+        #     face = torch.where(foreground_edges, torch.ones_like(face) * 0.99, face)
+        # else:
+        #     foreground_edges = None
+
         unfilled_mask = (1 * (face.sum(axis=1, keepdim=True) == 3).repeat(repeats=[1, 3, 1, 1])) * (1 - 1 * background_mask)  # white pixels are unfilled
 
         filled_mask = 1 - unfilled_mask # other pixels are filled
 
         results = {
             "background_mask": background_mask,
+            # "foreground_edges": foreground_edges,
             "pixel_uvs": pixel_uvs,
             "unfilled_mask": unfilled_mask,
             "filled_mask": filled_mask,
