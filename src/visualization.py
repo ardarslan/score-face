@@ -5,10 +5,10 @@ from PIL import Image
 from utils import get_results_dir
 
 
-def save_images(_images, image_type, iteration, cfg, elev, azimuth, update_round):
+def save_images(_images, image_type, iteration, cfg, elev, azimuth):
     images = (np.clip(_images.permute(0, 2, 3, 1).detach().cpu().numpy(), a_min=0.0, a_max=1.0) * 255.0).astype(np.uint8)
     results_dir = get_results_dir(cfg)
-    image_main_folder_path = os.path.join(results_dir, "intermediates", image_type, f"update_round_{update_round}", f"elev_{elev}_azimuth_{azimuth}")
+    image_main_folder_path = os.path.join(results_dir, "intermediates", image_type, f"elev_{elev}_azimuth_{azimuth}")
     os.makedirs(image_main_folder_path, exist_ok=True)
     for image_index, image in enumerate(images):
         image_iteration_folder_path = os.path.join(image_main_folder_path, str(iteration).zfill(6))
@@ -19,9 +19,9 @@ def save_images(_images, image_type, iteration, cfg, elev, azimuth, update_round
         cv2.imwrite(image_file_path, image)
 
 
-def save_optimization_gif(cfg, elev, azimuth, update_round):
+def save_optimization_gif(cfg, elev, azimuth):
     results_dir = get_results_dir(cfg)
-    face_main_folder_path = os.path.join(results_dir, "intermediates", "face", f"update_round_{update_round}", f"elev_{elev}_azimuth_{azimuth}")
+    face_main_folder_path = os.path.join(results_dir, "intermediates", "face", f"elev_{elev}_azimuth_{azimuth}")
     face_iteration_folder_paths = [os.path.join(face_main_folder_path, iteration) for iteration in sorted(os.listdir(face_main_folder_path))]
     face_iteration_folder_paths = [face_iteration_folder_path for face_iteration_folder_path in face_iteration_folder_paths if os.path.isdir(face_iteration_folder_path)]
     face_file_paths = [os.path.join(face_iteration_folder_path, "0".zfill(6) + ".png") for face_iteration_folder_path in face_iteration_folder_paths] # Create gif for only first sample in the batch
@@ -75,7 +75,8 @@ def save_outputs(cfg, final_texture, target_background, renderer, elevs, azimuth
 
     for index, (elev, azimuth) in enumerate(elevs_azimuths):
         image_file_path = os.path.join(face_outputs_dir, f"{str(index).zfill(6)}_{elev}_{azimuth}.png")
-        current_face = next(renderer.render(texture=final_texture[0].unsqueeze(0), background=target_background[0].unsqueeze(0), elev=elev, azimuth=azimuth, result_keys=["face"])) # Create gif for only first sample in the batch
+        pixel_uvs, background_mask = renderer.prerender(texture=final_texture, elev=elev, azimuth=azimuth, result_keys=["pixel_uvs", "background_mask"])
+        current_face = renderer.render(texture=final_texture[0].unsqueeze(0), background=target_background[0].unsqueeze(0), pixel_uvs=pixel_uvs, background_mask=background_mask)
         current_face = (current_face[0].permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)[:, :, [2, 1, 0]]
         current_face = cv2.resize(current_face, dsize=(cfg["saved_image_size"], cfg["saved_image_size"]))
         cv2.imwrite(image_file_path, current_face)

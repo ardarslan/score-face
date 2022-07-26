@@ -37,6 +37,14 @@ def get_score_model(cfg):
     return score_model
 
 
+def get_score_fn(sde, score_model):
+    def score_fn(x, vec_t):
+        labels = sde.marginal_prob(torch.zeros_like(x), vec_t)[1]
+        score = score_model(x, labels)
+        return score
+    return score_fn
+
+
 def get_inpaint_update_fn(update_fn, sde):
     """Modify the update function of predictor & corrector to incorporate data information."""
     def inpaint_update_fn(model, data, mask, x, t):

@@ -70,21 +70,26 @@ def get_target_background(cfg):
     return target_background
 
 
-def update_texture(cfg, current_texture, pixel_uvs, current_optimized_face_mean, unfilled_mask, update_round):
-    pixel_uvs[:, :, :, 0] = torch.floor((pixel_uvs[:, :, :, 0] + 1) * cfg["texture_size"] / 2)
-    pixel_uvs[:, :, :, 1] = cfg["texture_size"] - 1 - torch.floor(cfg["texture_size"] * (pixel_uvs[:, :, :, 1] + 1) / 2)
-    current_optimized_face_mean = torch.clamp(current_optimized_face_mean, min=0.0, max=1.0)
+# def update_texture(cfg, current_texture, pixel_uvs, current_optimized_face_mean, unfilled_mask, update_round):
+#     pixel_uvs[:, :, :, 0] = torch.floor((pixel_uvs[:, :, :, 0] + 1) * cfg["texture_size"] / 2)
+#     pixel_uvs[:, :, :, 1] = cfg["texture_size"] - 1 - torch.floor(cfg["texture_size"] * (pixel_uvs[:, :, :, 1] + 1) / 2)
+#     current_optimized_face_mean = torch.clamp(current_optimized_face_mean, min=0.0, max=1.0)
 
-    for sample_idx in range(cfg["batch_size"]):
-        # if update_round == 0:
-        #   gray = cv2.cvtColor(current_optimized_face_mean[sample_idx, :, :, :].permute(1, 2, 0).cpu().numpy(), cv2.COLOR_RGB2GRAY)
-        for y in range(cfg["image_size"]):
-            for x in range(cfg["image_size"]):
-                if unfilled_mask[sample_idx, 0, y, x] == 1:
-                    # if (update_round == 0 and gray[y, x] > 0.2) or update_round == 1:
-                    current_pixel = current_optimized_face_mean[sample_idx, :, y, x]
-                    # if (update_round == 0 and not (current_pixel[1] > 0.8 and current_pixel[0] < 0.2 and current_pixel[2] < 0.2)) or (update_round == 1):
-                    u = int(pixel_uvs[sample_idx, y, x, 0])
-                    v = int(pixel_uvs[sample_idx, y, x, 1])
-                    current_texture[sample_idx, :, v, u] = current_pixel
-    return current_texture
+#     for sample_idx in range(cfg["batch_size"]):
+#         # if update_round == 0:
+#         #   gray = cv2.cvtColor(current_optimized_face_mean[sample_idx, :, :, :].permute(1, 2, 0).cpu().numpy(), cv2.COLOR_RGB2GRAY)
+#         for y in range(cfg["image_size"]):
+#             for x in range(cfg["image_size"]):
+#                 if unfilled_mask[sample_idx, 0, y, x] == 1:
+#                     # if (update_round == 0 and gray[y, x] > 0.2) or update_round == 1:
+#                     current_pixel = current_optimized_face_mean[sample_idx, :, y, x]
+#                     # if (update_round == 0 and not (current_pixel[1] > 0.8 and current_pixel[0] < 0.2 and current_pixel[2] < 0.2)) or (update_round == 1):
+#                     u = int(pixel_uvs[sample_idx, y, x, 0])
+#                     v = int(pixel_uvs[sample_idx, y, x, 1])
+#                     current_texture[sample_idx, :, v, u] = current_pixel
+#     return current_texture
+
+
+def get_grad_texture(texture, grad_face, render_func):
+    _, grad_texture = torch.autograd.functional.vjp(func=render_func, inputs=texture, v=grad_face, create_graph=False, strict=False)
+    return grad_texture
