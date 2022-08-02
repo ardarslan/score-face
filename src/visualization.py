@@ -2,13 +2,13 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
-from utils import get_results_dir
+from utils import get_experiment_dir
 
 
-def save_images(_images, image_type, iteration, elev, azimuth, image_save_dir, experiment_name, saved_image_size):
+def save_images(_images, image_type, iteration, optimization_round, elev, azimuth, results_dir, experiment_name, saved_image_size):
     images = (np.clip(_images.permute(0, 2, 3, 1).detach().cpu().numpy(), a_min=0.0, a_max=1.0) * 255.0).astype(np.uint8)
-    results_dir = get_results_dir(image_save_dir=image_save_dir, experiment_name=experiment_name)
-    image_main_folder_path = os.path.join(results_dir, "intermediates", image_type, f"elev_{elev}_azimuth_{azimuth}")
+    experiment_dir = get_experiment_dir(results_dir=results_dir, experiment_name=experiment_name)
+    image_main_folder_path = os.path.join(experiment_dir, "intermediates", image_type, f"round_{optimization_round}_elev_{elev}_azimuth_{azimuth}")
     os.makedirs(image_main_folder_path, exist_ok=True)
     for image_index, image in enumerate(images):
         image_iteration_folder_path = os.path.join(image_main_folder_path, str(iteration).zfill(6))
@@ -20,12 +20,12 @@ def save_images(_images, image_type, iteration, elev, azimuth, image_save_dir, e
         cv2.imwrite(image_file_path, image)
 
 
-def save_optimization_gif(elev, azimuth, image_save_dir, experiment_name):
-    results_dir = get_results_dir(image_save_dir=image_save_dir, experiment_name=experiment_name)
-    face_main_folder_path = os.path.join(results_dir, "intermediates", "face", f"elev_{elev}_azimuth_{azimuth}")
+def save_optimization_gif(optimization_round, elev, azimuth, results_dir, experiment_name):
+    experiment_dir = get_experiment_dir(results_dir=results_dir, experiment_name=experiment_name)
+    face_main_folder_path = os.path.join(experiment_dir, "intermediates", "face", f"round_{optimization_round}_elev_{elev}_azimuth_{azimuth}")
     face_iteration_folder_paths = [os.path.join(face_main_folder_path, iteration) for iteration in sorted(os.listdir(face_main_folder_path))]
     face_iteration_folder_paths = [face_iteration_folder_path for face_iteration_folder_path in face_iteration_folder_paths if os.path.isdir(face_iteration_folder_path)]
-    face_file_paths = [os.path.join(face_iteration_folder_path, "0".zfill(6) + ".png") for face_iteration_folder_path in face_iteration_folder_paths] # Create gif for only first sample in the batch
+    face_file_paths = [os.path.join(face_iteration_folder_path, "0".zfill(6) + ".png") for face_iteration_folder_path in face_iteration_folder_paths]
     gif_file_path = os.path.join(face_main_folder_path, "animation.gif")
     imgs = (Image.open(face_file_path) for face_file_path in face_file_paths)
     img = next(imgs)
@@ -33,9 +33,9 @@ def save_optimization_gif(elev, azimuth, image_save_dir, experiment_name):
              save_all=True, duration=100, loop=0)
 
 
-def save_outputs(large_texture, small_texture, target_background, renderer, elevs, azimuths, image_save_dir, experiment_name, obj_path, axis_angle_path):
-    results_dir = get_results_dir(image_save_dir=image_save_dir, experiment_name=experiment_name)
-    outputs_dir = os.path.join(results_dir, "outputs")
+def save_outputs(large_texture, small_texture, target_background, renderer, elevs, azimuths, results_dir, experiment_name, input_obj_path, input_axis_angle_path):
+    experiment_dir = get_experiment_dir(results_dir=results_dir, experiment_name=experiment_name)
+    outputs_dir = os.path.join(experiment_dir, "outputs")
     face_outputs_dir = os.path.join(outputs_dir, "face")
     large_texture_outputs_dir = os.path.join(outputs_dir, "large_texture")
     small_texture_outputs_dir = os.path.join(outputs_dir, "small_texture")
@@ -83,7 +83,7 @@ def save_outputs(large_texture, small_texture, target_background, renderer, elev
 
     for index, (elev, azimuth) in enumerate(elevs_azimuths):
         image_file_path = os.path.join(face_outputs_dir, f"{str(index).zfill(6)}_{elev}_{azimuth}.png")
-        pixel_uvs, background_mask = renderer.prerender(obj_path=obj_path, axis_angle_path=axis_angle_path, texture=large_texture, elev=elev, azimuth=azimuth)
+        pixel_uvs, background_mask = renderer.prerender(input_obj_path=input_obj_path, input_axis_angle_path=input_axis_angle_path, texture=large_texture, elev=elev, azimuth=azimuth)
         current_face = renderer.render(texture=large_texture[0].unsqueeze(0), background=target_background[0].unsqueeze(0), pixel_uvs=pixel_uvs, background_mask=background_mask)
         current_face = (current_face[0].permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)[:, :, [2, 1, 0]]
         cv2.imwrite(image_file_path, current_face)

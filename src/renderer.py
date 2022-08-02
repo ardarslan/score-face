@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from pytorch3d.io import load_obj
 from pytorch3d.ops import interpolate_face_attributes
 from pytorch3d.renderer.mesh import Textures
@@ -9,72 +8,63 @@ from pytorch3d.renderer import (
     RasterizationSettings,
     MeshRasterizer
 )
-from pytorch3d.transforms import quaternion_to_matrix, axis_angle_to_quaternion, matrix_to_quaternion, quaternion_multiply
-from utils import load_image_axis_angle, axis_angle_rotation
+from pytorch3d.transforms import quaternion_to_matrix
 
 
 class Renderer(object):
-    def __init__(self, image_size, camera_distance, device):
+    def __init__(self, image_size, texture_size, camera_distance, batch_size, num_channels, input_obj_path, device):
+        verts, faces, aux = load_obj(input_obj_path, device=device)
+        verts_uvs = aux.verts_uvs[None, ...]  # (1, V, 2)
+        faces_uvs = faces.textures_idx[None, ...]  # (1, F, 3)
+        verts = verts[None, ...]
+        faces = faces.verts_idx[None, ...]
+        texture = torch.randn(size=(batch_size, texture_size, texture_size, num_channels), device=device)
+
+        self.textures_uv = Textures(verts_uvs=verts_uvs, faces_uvs=faces_uvs, maps=texture)
+        self.meshes = Meshes(verts=verts, faces=faces, textures=self.textures_uv)
+        verts_packed = self.meshes.verts_packed()
+        center = verts_packed.mean(0)
+        scale = max((verts_packed - center).abs().max(0)[0])
+        self.meshes.offset_verts_(-center)
+        self.meshes.scale_verts_((1.0 / float(scale)))
+
+        self.T = torch.tensor([[0.0, 0.0, camera_distance]], device=device)
+
         self.raster_settings = RasterizationSettings(
             image_size=image_size,
             blur_radius=0.0,
             bin_size=0
         )
-        self.camera_distance = camera_distance
+
         self.device = device
     
     def render(self, texture, background, pixel_uvs, background_mask):
         texture_sampled = torch.nn.functional.grid_sample(torch.flip(texture, dims=[-2]), pixel_uvs, mode='nearest', padding_mode='border', align_corners=False)
         return torch.where(background_mask, background, texture_sampled)
 
-    def prerender(self, obj_path, axis_angle_path, texture, elev, azimuth):
+    def prerender(self, quaternion):
         """
             Inputs:
-                obj_path: str
-                texture: torch.tensor with shape (N, C, H, W)
-                elev: float
-                azimuth: float
+                quaternion: torch.Tensor with shape (N, 4)
+            Outputs:
+                pixel_uvs: torch.Tensor with shape (N, image_size, image_size, 2)
+                background_mask: torch.Tensor with shape (N, num_channels, image_size, image_size)
         """
-        verts, faces, aux = load_obj(obj_path, device=self.device)
-        verts_uvs = aux.verts_uvs[None, ...]  # (1, V, 2)
-        faces_uvs = faces.textures_idx[None, ...]  # (1, F, 3)
-        verts = verts[None, ...]
-        faces = faces.verts_idx[None, ...]
-        textures_uv = Textures(verts_uvs=verts_uvs, faces_uvs=faces_uvs, maps=texture.permute(0, 2, 3, 1))
-        meshes = Meshes(verts=verts, faces=faces, textures=textures_uv)
-        
-        # center the mesh
-        verts_packed = meshes.verts_packed()
-        center = verts_packed.mean(0)
-        scale = max((verts_packed - center).abs().max(0)[0])
-        meshes.offset_verts_(-center)
-        meshes.scale_verts_((1.0 / float(scale)))
 
-        # rotate the mesh
-        axis_angle_image = load_image_axis_angle(axis_angle_path, self.device)
-        quaternion_image = axis_angle_to_quaternion(axis_angle_image)
-        quaternion_fix = matrix_to_quaternion(axis_angle_rotation(axis="Y", angle=torch.tensor([[np.pi]], device=self.device)))
-        quaternion_frontal = quaternion_multiply(quaternion_image, quaternion_fix)
-        quaternion_elev = matrix_to_quaternion(axis_angle_rotation(axis="X", angle=torch.tensor([[np.pi * elev / 180.0]], device=self.device)))
-        quaternion_azimuth = matrix_to_quaternion(axis_angle_rotation(axis="Y", angle=torch.tensor([[np.pi * azimuth / 180.0]], device=self.device)))
-        quaternion_elev_azimuth = quaternion_multiply(quaternion_azimuth, quaternion_elev)
-        quaternion_final = quaternion_multiply(quaternion_frontal, quaternion_elev_azimuth)
-        
-        R = quaternion_to_matrix(quaternion_final)[0]
-        T = torch.tensor([[0.0, 0.0, self.camera_distance]], device=self.device)
+        R = quaternion_to_matrix(quaternion)
 
-        cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
+        cameras = FoVPerspectiveCameras(R=R, T=self.T, device=self.device)
         rasterizer = MeshRasterizer(
             cameras=cameras,
             raster_settings=self.raster_settings
         )
-        fragments = rasterizer(meshes)
+        fragments = rasterizer(self.meshes)
 
         is_background = (fragments.pix_to_face[..., 0] < 0)
         background_mask = is_background.unsqueeze(-1).repeat(1, 1, 1, 3).permute(0, 3, 1, 2)
 
         packing_list = [
-            i[j] for i, j in zip(textures_uv.verts_uvs_list(), textures_uv.faces_uvs_list())
+            i[j] for i, j in zip(self.textures_uv.verts_uvs_list(), self.textures_uv.faces_uvs_list())
         ]
         faces_verts_uvs = torch.cat(packing_list)
         pixel_uvs = interpolate_face_attributes(
