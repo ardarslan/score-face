@@ -48,7 +48,20 @@ gdown --id 1-mtdSwuefIZA0n85QWScQo2WRvJNWwUy
 ```
 
 ### Run the code.
+
+Go into src folder.
 ```
 cd ../src
-python3 main.py --input_obj_path /path/to/input/obj
+```
+
+In the commandlines below, order_views and two_rounds should be "true" or "false".
+
+To do optimization in the image space:
+```
+python3 main.py --input_obj_path /local/home/aarslan/TF_FLAME/results/33673.obj --optimization_space image --num_corrector_steps 1 --snr 0.075 --order_views true --two_rounds true
+```
+
+To do optimization in the texture space:
+```
+python3 main.py --input_obj_path /local/home/aarslan/TF_FLAME/results/33673.obj --optimization_space texture --num_corrector_steps 6 --snr 0.015 --order_views true --two_rounds true
 ```
