@@ -1,6 +1,7 @@
 import functools
 import torch
-from score_sde.configs.ve import ffhq_256_ncsnpp_continuous as configs
+# from score_sde.configs.ve import ffhq_256_ncsnpp_continuous as configs
+from score_sde.configs.ve import ffhq_ncsnpp_continuous as configs
 from score_sde.models import utils as mutils
 from score_sde.models import ncsnpp  # this should be imported
 from score_sde.sde_lib import VESDE

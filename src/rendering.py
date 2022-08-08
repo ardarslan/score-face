@@ -15,7 +15,11 @@ from typing import Dict, Any, Tuple
 class Renderer(object):
     def __init__(self, cfg: Dict[str, Any]) -> None:
         image_size = cfg["image_size"]
-        texture_size = cfg["large_texture_size"]
+        if cfg["optimization_space"] == "image":
+            texture_size = cfg["small_texture_size"]
+        elif cfg["optimization_space"] == "texture":
+            texture_size = cfg["large_texture_size"]
+
         camera_distance = cfg["camera_distance"]
         batch_size = cfg["batch_size"]
         num_channels = cfg["num_channels"]

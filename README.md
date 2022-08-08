@@ -19,6 +19,7 @@ First, download the texture data.
 ```
 wget http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
 unzip FLAME_texture_data.zip
+mv texture_data_512.npy data/
 mv texture_data_2048.npy data/
 rm -rf texture_data_*
 rm -rf FLAME_texture_data.zip
@@ -32,9 +33,19 @@ Second, download the FLAME model.
 - Copy "generic_model.pkl" into "models" folder.
 
 ### Fit FLAME on an input image.
+Set the following environment variable.
 ```
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
-python3 fit_2D_landmarks.py --input_img_path /path/to/input/image
+```
+
+If you will run the optimization in image space:
+```
+python3 fit_2D_landmarks.py --texture_data_path ./data/texture_data_512.npy --input_img_path /path/to/input/image
+```
+
+If you will run the optimization in texture space:
+```
+python3 fit_2D_landmarks.py --texture_data_path ./data/texture_data_2048.npy --input_img_path /path/to/input/image
 ```
 
 ### Go into this repository. Create and activate its environment. Prepare its data.
@@ -44,7 +55,7 @@ conda env create -f environment.yml
 conda activate score-face
 mkdir assets
 cd assets
-gdown --id 1-mtdSwuefIZA0n85QWScQo2WRvJNWwUy
+gdown --id 1sXrlgTC6U2jzWCIUZTbRcY3AbOJfcbbu
 ```
 
 ### Run the code.
@@ -58,10 +69,10 @@ In the commandlines below, order_views and two_rounds should be "true" or "false
 
 To do optimization in the image space:
 ```
-python3 main.py --input_obj_path /local/home/aarslan/TF_FLAME/results/33673.obj --optimization_space image --num_corrector_steps 1 --snr 0.075 --order_views true --two_rounds true
+python3 main.py --input_obj_path /local/home/aarslan/TF_FLAME/results_512/33673.obj --optimization_space image --num_corrector_steps 1 --snr 0.15 --order_views true --two_rounds true
 ```
 
 To do optimization in the texture space:
 ```
-python3 main.py --input_obj_path /local/home/aarslan/TF_FLAME/results/33673.obj --optimization_space texture --num_corrector_steps 6 --snr 0.015 --order_views true --two_rounds true
+python3 main.py --input_obj_path /local/home/aarslan/TF_FLAME/results_2048/33673.obj --optimization_space texture --num_corrector_steps 6 --snr 0.015 --order_views true --two_rounds true
 ```
