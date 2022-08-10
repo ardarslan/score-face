@@ -1,7 +1,5 @@
 import functools
 import torch
-# from score_sde.configs.ve import ffhq_256_ncsnpp_continuous as configs
-from score_sde.configs.ve import ffhq_ncsnpp_continuous as configs
 from score_sde.models import utils as mutils
 from score_sde.models import ncsnpp  # this should be imported
 from score_sde.sde_lib import VESDE
@@ -14,6 +12,13 @@ from typing import Dict, Any, Callable
 
 
 def get_sde(cfg: Dict[str, Any]) -> VESDE:
+    if cfg["optimization_space"] == "image":
+        from score_sde.configs.ve import ffhq_ncsnpp_continuous as configs
+    elif cfg["optimization_space"] == "texture":
+        from score_sde.configs.ve import ffhq_256_ncsnpp_continuous as configs
+    else:
+        raise Exception(f"Not a valid optimization_space {cfg['optimization_space']}.")
+
     sde_N = cfg["sde_N"]
     config = configs.get_config()
     sde = VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=sde_N)
@@ -24,6 +29,13 @@ def get_score_model(cfg: Dict[str, Any]) -> torch.nn.DataParallel:
     checkpoint_path = cfg["checkpoint_path"]
     batch_size = cfg["batch_size"]
     device = cfg["device"]
+
+    if cfg["optimization_space"] == "image":
+        from score_sde.configs.ve import ffhq_ncsnpp_continuous as configs
+    elif cfg["optimization_space"] == "texture":
+        from score_sde.configs.ve import ffhq_256_ncsnpp_continuous as configs
+    else:
+        raise Exception(f"Not a valid optimization_space {cfg['optimization_space']}.")
 
     config = configs.get_config()
     config.training.batch_size = batch_size

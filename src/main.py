@@ -1,6 +1,6 @@
 from utils import set_experiment_name, set_seeds, set_3dmm_result_paths, \
                   save_cfg, get_target_background, get_cfg, get_dark_pixel_alloweds, \
-                  set_device
+                  set_device, set_image_size_and_checkpoint_path
 from model_utils import get_sde, get_score_model, get_score_fn
 from optimization import run_multi_view_optimization_in_texture_space, run_multi_view_optimization_in_image_space
 from rendering import Renderer
@@ -16,6 +16,7 @@ if __name__ == "__main__":
     set_device(cfg=cfg)
     set_experiment_name(cfg=cfg)
     set_3dmm_result_paths(cfg=cfg)
+    set_image_size_and_checkpoint_path(cfg=cfg)
     save_cfg(cfg=cfg)
 
     sde = get_sde(cfg=cfg)

@@ -21,20 +21,22 @@ def get_grad_texture(texture: torch.Tensor, grad_face: torch.Tensor, render_func
 def whiten_large_texture(cfg: Dict[str, Any], pixel_uvs: torch.Tensor, pixels_to_whiten: List[Tuple[int, int, int]], large_texture: torch.Tensor) -> torch.Tensor:
     device = cfg["device"]
     large_texture_size = cfg["large_texture_size"]
+    num_channels = cfg["num_channels"]
 
     for sample_idx, y, x in pixels_to_whiten:
         u_large = math.floor((pixel_uvs[sample_idx, y, x, 0] + 1) * large_texture_size / 2)
         v_large = large_texture_size - 1 - math.floor(large_texture_size * (pixel_uvs[sample_idx, y, x, 1] + 1) / 2)
-        large_texture[sample_idx, :, v_large, u_large] = torch.tensor([1.0, 1.0, 1.0], device=device)
+        large_texture[sample_idx, :, v_large, u_large] = torch.ones(num_channels, device=device)
     
     return large_texture
 
 
 def whiten_face(cfg: Dict[str, Any], face: torch.Tensor, pixels_to_whiten: List[Tuple[int, int, int]]) -> torch.Tensor:
     device = cfg["device"]
+    num_channels = cfg["num_channels"]
 
     for sample_idx, y, x in pixels_to_whiten:
-        face[sample_idx, :, y, x] = torch.tensor([1.0, 1.0, 1.0], device=device)
+        face[sample_idx, :, y, x] = torch.ones(num_channels, device=device)
 
     return face
 
@@ -110,8 +112,13 @@ def update_small_texture_using_face(cfg: Dict[str, Any], current_texture: torch.
     small_texture_size = cfg["small_texture_size"]
     batch_size = cfg["batch_size"]
     image_size = cfg["image_size"]
+    num_channels = cfg["num_channels"]
+    device = cfg["device"]
 
     current_optimized_face_mean_clamped = torch.clamp(current_optimized_face_mean, min=0.0, max=1.0)
+
+    updates = torch.zeros_like(current_texture)
+    updates_count = torch.zeros_like(current_texture)
 
     for sample_idx in range(batch_size):
         for y in range(image_size):
@@ -121,8 +128,17 @@ def update_small_texture_using_face(cfg: Dict[str, Any], current_texture: torch.
 
                 u = math.floor((pixel_uvs[sample_idx, y, x, 0] + 1) * small_texture_size / 2)
                 v = small_texture_size - 1 - math.floor(small_texture_size * (pixel_uvs[sample_idx, y, x, 1] + 1) / 2)
+                current_pixel = current_optimized_face_mean_clamped[sample_idx, :, y, x]
+                current_pixel_sum = current_pixel.sum()
 
-                current_texture[sample_idx, :, v, u] = current_optimized_face_mean_clamped[sample_idx, :, y, x]
+                if current_pixel_sum in [0, 3]:
+                    continue
+
+                updates[sample_idx, :, v, u] += current_pixel
+                updates_count[sample_idx, :, v, u] += torch.ones(num_channels, device=device)
+    
+    updates /= updates_count
+    current_texture = torch.where(updates_count.bool(), updates, current_texture)
 
     return current_texture
 
@@ -130,8 +146,13 @@ def update_small_texture_using_face(cfg: Dict[str, Any], current_texture: torch.
 def update_small_texture_using_large_texture(cfg: Dict[str, Any], small_texture: torch.Tensor, large_texture: torch.Tensor, pixel_uvs: torch.Tensor) -> torch.Tensor:
     small_texture_size = cfg["small_texture_size"]
     large_texture_size = cfg["large_texture_size"]
+    num_channels = cfg["num_channels"]
+    device = cfg["device"]
 
     large_texture_clamped = torch.clamp(large_texture, min=0.0, max=1.0)
+    updates = torch.zeros_like(small_texture)
+    updates_count = torch.zeros_like(small_texture)
+
     for sample_idx in range(pixel_uvs.shape[0]):
         for y in range(pixel_uvs.shape[1]):
             for x in range(pixel_uvs.shape[2]):
@@ -142,13 +163,18 @@ def update_small_texture_using_large_texture(cfg: Dict[str, Any], small_texture:
                 if ((u_small == 0) and (v_small == small_texture_size - 1)):
                     continue
                 else:
-                    small_texture[sample_idx, :, v_small, u_small] = large_texture_clamped[sample_idx, :, v_large, u_large]
+                    updates[sample_idx, :, v_small, u_small] += large_texture_clamped[sample_idx, :, v_large, u_large]
+                    updates_count[sample_idx, :, v_small, u_small] += torch.ones(num_channels, device=device)
+    
+    updates /= updates_count
+    small_texture = torch.where(updates_count.bool(), updates, small_texture)
+
     return small_texture
 
 
 def update_large_texture_by_upsampling_small_texture(cfg: Dict[str, Any], small_texture: torch.Tensor, initial_large_texture: torch.Tensor, initial_filled_texture_mask: torch.Tensor) -> torch.Tensor:
     large_texture_size = cfg["large_texture_size"]
-    upsampled_small_texture = torch.nn.functional.interpolate(input=small_texture, size=large_texture_size, mode='nearest')
+    upsampled_small_texture = torch.nn.functional.interpolate(input=small_texture, size=large_texture_size)
     return torch.where(initial_filled_texture_mask, initial_large_texture, upsampled_small_texture)
 
 
@@ -223,25 +249,23 @@ def run_single_view_optimization_in_texture_space(cfg: Dict[str, Any], current_s
 
 
 def run_single_view_optimization_in_image_space(cfg: Dict[str, Any], elev: float, azimuth: float, dark_pixel_allowed: bool, renderer: Renderer, target_background: torch.Tensor, sde: VESDE, current_small_texture: torch.Tensor, timesteps: torch.Tensor, score_model: torch.nn.DataParallel, predictor_inpaint_update_fn: Callable, corrector_inpaint_update_fn: Callable, pixel_uvs: torch.Tensor, background_mask: torch.Tensor) -> torch.Tensor:
-    num_channels = cfg["num_channels"]
     save_images_kwargs = {"cfg": cfg, "elev": elev, "azimuth": azimuth, "dark_pixel_allowed": dark_pixel_allowed}
 
+    num_channels = cfg["num_channels"]
+
     current_unoptimized_face = renderer.render(texture=current_small_texture, background=target_background, pixel_uvs=pixel_uvs, background_mask=background_mask)
-    unfilled_face_mask = (current_unoptimized_face.sum(axis=1, keepdim=True) == num_channels).repeat(repeats=[1, num_channels, 1, 1]) * (1 - 1 * background_mask)  # white pixels are unfilled
-    filled_face_mask = 1 - unfilled_face_mask # other pixels are filled
+    unfilled_face_mask = (current_unoptimized_face.sum(axis=1, keepdim=True) == num_channels).repeat(repeats=[1, num_channels, 1, 1])
+    filled_face_mask = ~unfilled_face_mask
 
     current_optimized_face = current_unoptimized_face * filled_face_mask + sde.prior_sampling(current_unoptimized_face.shape).to(current_unoptimized_face.device) * unfilled_face_mask
-
-    save_images(_images=unfilled_face_mask, image_type="unfilled_face_mask", iteration=0, **save_images_kwargs)
-    save_images(_images=filled_face_mask, image_type="filled_face_mask", iteration=0, **save_images_kwargs)
 
     save_images(_images=current_small_texture, image_type="initial_texture", iteration=0, **save_images_kwargs)
     save_images(_images=current_unoptimized_face, image_type="initial_face", iteration=0, **save_images_kwargs)
 
     for i in range(sde.N):
         t = timesteps[i]
-        current_optimized_face, current_optimized_face_mean = predictor_inpaint_update_fn(score_model, current_unoptimized_face, filled_face_mask, current_optimized_face, t)
-        current_optimized_face, current_optimized_face_mean = corrector_inpaint_update_fn(score_model, current_unoptimized_face, filled_face_mask, current_optimized_face, t)
+        current_optimized_face, current_optimized_face_mean = predictor_inpaint_update_fn(score_model, current_unoptimized_face, 1 * filled_face_mask, current_optimized_face, t)
+        current_optimized_face, current_optimized_face_mean = corrector_inpaint_update_fn(score_model, current_unoptimized_face, 1 * filled_face_mask, current_optimized_face, t)
         if i % 10 == 0:
             save_images(_images=current_optimized_face_mean, image_type="face", iteration=i, **save_images_kwargs)
 
@@ -270,7 +294,7 @@ def run_multi_view_optimization_in_texture_space(cfg: Dict[str, Any], sde: VESDE
             elev_azimuth_splitted = elev_azimuth.split("_")
             elev, azimuth = elev_azimuth_splitted[0], elev_azimuth_splitted[1]
             current_small_texture, current_large_texture = run_single_view_optimization_in_texture_space(cfg=cfg, current_small_texture=current_small_texture, current_large_texture=current_large_texture, initial_large_texture=initial_large_texture, initial_filled_texture_mask=initial_filled_texture_mask, sde=sde, timesteps=timesteps, elev=elev, azimuth=azimuth, dark_pixel_allowed=dark_pixel_allowed, renderer=renderer, target_background=target_background, score_fn=score_fn, pixel_uvs=pixel_uvs, background_mask=background_mask)
-        save_outputs(cfg=cfg, final_texture=current_large_texture, target_background=torch.zeros_like(target_background), renderer=renderer, elevs=elevs, azimuths=azimuths, ordered_prerender_results=ordered_prerender_results)
+        save_outputs(cfg=cfg, initial_texture=initial_large_texture, final_texture=current_large_texture, target_background=torch.zeros_like(target_background), renderer=renderer, elevs=elevs, azimuths=azimuths)
 
 
 def run_multi_view_optimization_in_image_space(cfg: Dict[str, Any], sde: VESDE, timesteps: torch.Tensor, renderer: Renderer, target_background: torch.Tensor, dark_pixel_alloweds: List[bool], elevs: List[float], azimuths: List[float], score_model: VESDE, ordered_prerender_results: OrderedDict[str, Tuple[torch.Tensor, torch.Tensor]]) -> None:
@@ -283,4 +307,4 @@ def run_multi_view_optimization_in_image_space(cfg: Dict[str, Any], sde: VESDE, 
             elev_azimuth_splitted = elev_azimuth.split("_")
             elev, azimuth = elev_azimuth_splitted[0], elev_azimuth_splitted[1]
             current_small_texture = run_single_view_optimization_in_image_space(cfg=cfg, elev=elev, azimuth=azimuth, dark_pixel_allowed=dark_pixel_allowed, renderer=renderer, target_background=target_background, sde=sde, current_small_texture=current_small_texture, timesteps=timesteps, score_model=score_model, predictor_inpaint_update_fn=predictor_inpaint_update_fn, corrector_inpaint_update_fn=corrector_inpaint_update_fn, pixel_uvs=pixel_uvs, background_mask=background_mask)
-        save_outputs(cfg=cfg, final_texture=current_small_texture, target_background=torch.zeros_like(target_background), renderer=renderer, elevs=elevs, azimuths=azimuths, ordered_prerender_results=ordered_prerender_results)
+        save_outputs(cfg=cfg, initial_texture=initial_small_texture, final_texture=current_small_texture, target_background=torch.zeros_like(target_background), renderer=renderer, elevs=elevs, azimuths=azimuths)

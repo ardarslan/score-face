@@ -6,6 +6,7 @@ from PIL import Image
 from utils import get_experiment_dir
 from rendering import Renderer
 from typing import Dict, Any, List, Tuple, OrderedDict
+from transformation import get_quaternion_in_image_and_quaternion_to_make_image_frontal, get_quaternion_to_make_frontal_elev_azimuth, get_quaternion_to_make_image_elev_azimuth
 
 
 def save_images(cfg: Dict[str, Any], _images: torch.Tensor, image_type: str, iteration: int, dark_pixel_allowed: bool, elev: float, azimuth: float) -> None:
@@ -34,20 +35,41 @@ def save_optimization_gif(cfg: Dict[str, Any], dark_pixel_allowed: bool, elev: f
              save_all=True, duration=100, loop=0)
 
 
-def save_outputs(cfg: Dict[str, Any], final_texture: torch.Tensor, target_background: torch.Tensor, renderer: Renderer, elevs: List[float], azimuths: List[float], ordered_prerender_results: OrderedDict[str, Tuple[torch.Tensor, torch.Tensor]]) -> None:
-    step_azimuth = cfg["step_azimuth"]
-    step_elev = cfg["step_elev"]
-
-    experiment_dir = get_experiment_dir(cfg=cfg)
-    outputs_dir = os.path.join(experiment_dir, "outputs")
-    face_outputs_dir = os.path.join(outputs_dir, "face")
-    texture_outputs_dir = os.path.join(outputs_dir, "texture")
+def save_outputs_helper(cfg: Dict[str, Any], texture: torch.Tensor, prefix: str, outputs_dir: str, elevs_azimuths: List[Tuple[float, float]], renderer: Renderer, target_background: torch.Tensor) -> None:
+    face_outputs_dir = os.path.join(outputs_dir, f"{prefix}_face")
+    texture_outputs_dir = os.path.join(outputs_dir, f"{prefix}_texture")
     os.makedirs(face_outputs_dir, exist_ok=True)
     os.makedirs(texture_outputs_dir, exist_ok=True)
 
     texture_file_path = os.path.join(texture_outputs_dir, str(0).zfill(6) + ".png")
-    texture_np = (final_texture[0].permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)[:, :, [2, 1, 0]]
+    texture_np = (texture[0].permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)[:, :, [2, 1, 0]]
     cv2.imwrite(texture_file_path, texture_np)
+
+    for index, (elev, azimuth) in enumerate(elevs_azimuths):
+        _, quaternion_to_make_image_frontal = get_quaternion_in_image_and_quaternion_to_make_image_frontal(cfg=cfg)
+        quaternion_to_make_frontal_elev_azimuth = get_quaternion_to_make_frontal_elev_azimuth(cfg=cfg, elev=elev, azimuth=azimuth)
+        quaternion_to_make_image_elev_azimuth = get_quaternion_to_make_image_elev_azimuth(quaternion_to_make_frontal_elev_azimuth=quaternion_to_make_frontal_elev_azimuth, quaternion_to_make_image_frontal=quaternion_to_make_image_frontal)
+        pixel_uvs, background_mask = renderer.prerender(quaternion=quaternion_to_make_image_elev_azimuth)
+
+        face = renderer.render(texture=texture, background=target_background, pixel_uvs=pixel_uvs, background_mask=background_mask)
+        face = (face[0].permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)[:, :, [2, 1, 0]]
+        face_file_path = os.path.join(face_outputs_dir, f"{str(index).zfill(6)}_{elev}_{azimuth}.png")
+        cv2.imwrite(face_file_path, face)
+
+    face_file_paths = [os.path.join(face_outputs_dir, file_name) for file_name in sorted(os.listdir(face_outputs_dir))]
+    gif_file_path = os.path.join(outputs_dir, f"{prefix}_animation.gif")
+    imgs = (Image.open(face_file_path) for face_file_path in face_file_paths)
+    imgs_gen = next(imgs)
+    imgs_gen.save(fp=gif_file_path, format='GIF', append_images=imgs,
+                  save_all=True, duration=400, loop=0)
+
+
+def save_outputs(cfg: Dict[str, Any], initial_texture: torch.Tensor, final_texture: torch.Tensor, target_background: torch.Tensor, renderer: Renderer, elevs: List[float], azimuths: List[float]) -> None:
+    step_azimuth = cfg["step_azimuth"] / 2
+    step_elev = cfg["step_elev"] / 2
+
+    experiment_dir = get_experiment_dir(cfg=cfg)
+    outputs_dir = os.path.join(experiment_dir, "outputs")
 
     min_elev, max_elev = np.min(elevs), np.max(elevs)
     min_azimuth, max_azimuth = np.min(azimuths), np.max(azimuths)
@@ -77,16 +99,5 @@ def save_outputs(cfg: Dict[str, Any], final_texture: torch.Tensor, target_backgr
         current_elev -= step_elev
     current_elev = min_elev
 
-    for index, (elev, azimuth) in enumerate(elevs_azimuths):
-        pixel_uvs, background_mask = ordered_prerender_results[f"{elev}_{azimuth}"]
-        current_face = renderer.render(texture=final_texture[0].unsqueeze(0), background=target_background[0].unsqueeze(0), pixel_uvs=pixel_uvs, background_mask=background_mask)
-        current_face = (current_face[0].permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)[:, :, [2, 1, 0]]
-        image_file_path = os.path.join(face_outputs_dir, f"{str(index).zfill(6)}_{elev}_{azimuth}.png")
-        cv2.imwrite(image_file_path, current_face)
-    
-    face_file_paths = [os.path.join(face_outputs_dir, file_name) for file_name in sorted(os.listdir(face_outputs_dir))]
-    gif_file_path = os.path.join(outputs_dir, "animation.gif")
-    imgs = (Image.open(face_file_path) for face_file_path in face_file_paths)
-    img = next(imgs)
-    img.save(fp=gif_file_path, format='GIF', append_images=imgs,
-             save_all=True, duration=100, loop=0)
+    save_outputs_helper(cfg=cfg, texture=initial_texture, prefix="initial", outputs_dir=outputs_dir, elevs_azimuths=elevs_azimuths, renderer=renderer, target_background=target_background)
+    save_outputs_helper(cfg=cfg, texture=final_texture, prefix="final", outputs_dir=outputs_dir, elevs_azimuths=elevs_azimuths, renderer=renderer, target_background=target_background)

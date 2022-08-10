@@ -20,6 +20,7 @@ First, download the texture data.
 wget http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
 unzip FLAME_texture_data.zip
 mv texture_data_512.npy data/
+mv texture_data_1024.npy data/
 mv texture_data_2048.npy data/
 rm -rf texture_data_*
 rm -rf FLAME_texture_data.zip
@@ -56,6 +57,7 @@ conda activate score-face
 mkdir assets
 cd assets
 gdown --id 1sXrlgTC6U2jzWCIUZTbRcY3AbOJfcbbu
+gdown --id 1-mtdSwuefIZA0n85QWScQo2WRvJNWwUy
 ```
 
 ### Run the code.
@@ -64,8 +66,6 @@ Go into src folder.
 ```
 cd ../src
 ```
-
-In the commandlines below, order_views and two_rounds should be "true" or "false".
 
 To do optimization in the image space:
 ```

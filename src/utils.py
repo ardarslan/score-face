@@ -25,21 +25,20 @@ def get_cfg() -> Dict[str, Any]:
 
     # arguments with default values
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--image_size", type=int, default=1024, help="Width and height of face images.")
     parser.add_argument("--large_texture_size", type=int, default=2048, choices=[2048], help="Width and height of large texture images. If the optimizatioon is done in image space, this is not used. Only 2048 is supported.")
     parser.add_argument("--small_texture_size", type=int, default=512, choices=[512], help="Width and height of small texture images. If the optimization is done in image space, this is used as the texture size. Only 512 is supported.")
     parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="Device to use.")
     parser.add_argument("--batch_size", type=int, default=1, choices=[1], help="Currently only batch_size=1 is supported.")
     parser.add_argument("--num_channels", type=int, default=3, choices=[3], help="Currently only num_channels=3 is supported.")
     parser.add_argument("--results_dir", type=str, default="../results", help="Path to results directory.")
-    parser.add_argument("--checkpoint_path", type=str, default="../assets/checkpoint_60.pth", help="Path to score model's checkpoint file.")
+    parser.add_argument("--checkpoint_dir", type=str, default="../assets", help="Directory to score model's checkpoint files.")
     parser.add_argument("--sde_N", type=int, default=1000, help="Number of different noise levels used during the optimizations process.")
     parser.add_argument("--camera_distance", type=float, default=1.2, help="Distance between the rendered mesh and the camera.")
     parser.add_argument("--min_gray_intensity_in_texture", type=float, default=0.30, help="This is used only if 'two_rounds' argument is 'true'. This argument corresponds to the maximum gray intensity allowed for a pixel to be copied to the small texture during the first optimization round.")
     parser.add_argument("--initial_view", type=str, default="image", choices=["frontal", "image"], help="Initial view to optimize.")
-    parser.add_argument("--min_elev", type=float, default=-20.0, help="Minimum elev used during the optimization process.")
-    parser.add_argument("--max_elev", type=float, default=20.0, help="Maximum elev used during the optimization process.")
-    parser.add_argument("--step_elev", type=float, default=20.0, help="Elev step used during the optimization process.")
+    parser.add_argument("--min_elev", type=float, default=-10.0, help="Minimum elev used during the optimization process.")
+    parser.add_argument("--max_elev", type=float, default=10.0, help="Maximum elev used during the optimization process.")
+    parser.add_argument("--step_elev", type=float, default=10.0, help="Elev step used during the optimization process.")
     parser.add_argument("--min_azimuth", type=float, default=-40.0, help="Minimum azimuth used during the optimization process.")
     parser.add_argument("--max_azimuth", type=float, default=40.0, help="Maximum azimuth used during the optimization process.")
     parser.add_argument("--step_azimuth", type=float, default=20.0, help="Azimuth step used during the optimization process.")
@@ -96,7 +95,7 @@ def get_initial_textures(cfg: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tenso
     #     black_mask_moved = np.vstack((np.zeros((1, black_mask.shape[1])), black_mask[:-1, :]))
     #     black_mask = np.logical_or(black_mask, black_mask_moved)
     # elif _3dmm == "tf_flame":
-    black_mask = (gray <= 0)
+    black_mask = (gray <= 50)
     # else:
     #     raise Exception(f"Not a valid _3dmm {_3dmm}.")
     black_mask = np.tile(black_mask[:, :, None], reps=[1, 1, 3])
@@ -125,6 +124,17 @@ def set_3dmm_result_paths(cfg: Dict[str, Any]) -> None:
     # elif cfg["3dmm"] == "tf_flame":
     cfg["input_texture_path"] = cfg["input_obj_path"].replace(".obj", ".png")
     cfg["input_axis_angle_path"] = cfg["input_obj_path"].replace(".obj", "_axis_angle.npy")
+
+
+def set_image_size_and_checkpoint_path(cfg: Dict[str, Any]) -> None:
+    if cfg["optimization_space"] == "image":
+        cfg["image_size"] = 1024
+        cfg["checkpoint_path"] = os.path.join(cfg["checkpoint_dir"], "checkpoint_60.pth")
+    elif cfg["optimization_space"] == "texture":
+        cfg["image_size"] = 256
+        cfg["checkpoint_path"] = os.path.join(cfg["checkpoint_dir"], "checkpoint_48.pth")
+    else:
+        raise Exception(f"Not a valid optimization_space {cfg['optimization_space']}.")
 
 
 def get_target_background(cfg: Dict[str, Any]) -> torch.Tensor:
