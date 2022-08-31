@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from utils import get_experiment_dir
 from rendering import Renderer
-from typing import Dict, Any, List, Tuple, OrderedDict
+from typing import Dict, Any, List, Tuple
 from transformation import get_quaternion_in_image_and_quaternion_to_make_image_frontal, get_quaternion_to_make_frontal_elev_azimuth, get_quaternion_to_make_image_elev_azimuth
 
 
@@ -61,12 +61,12 @@ def save_outputs_helper(cfg: Dict[str, Any], texture: torch.Tensor, prefix: str,
     imgs = (Image.open(face_file_path) for face_file_path in face_file_paths)
     imgs_gen = next(imgs)
     imgs_gen.save(fp=gif_file_path, format='GIF', append_images=imgs,
-                  save_all=True, duration=400, loop=0)
+                  save_all=True, duration=cfg["animation_duration"], loop=0)
 
 
-def save_outputs(cfg: Dict[str, Any], initial_texture: torch.Tensor, final_texture: torch.Tensor, target_background: torch.Tensor, renderer: Renderer, elevs: List[float], azimuths: List[float]) -> None:
-    step_azimuth = cfg["step_azimuth"] / 2
-    step_elev = cfg["step_elev"] / 2
+def save_outputs(cfg: Dict[str, Any], unoptimized_texture: torch.Tensor, optimized_texture: torch.Tensor, target_background: torch.Tensor, renderer: Renderer, elevs: List[float], azimuths: List[float]) -> None:
+    step_azimuth = cfg["step_azimuth"]
+    step_elev = cfg["step_elev"]
 
     experiment_dir = get_experiment_dir(cfg=cfg)
     outputs_dir = os.path.join(experiment_dir, "outputs")
@@ -99,5 +99,5 @@ def save_outputs(cfg: Dict[str, Any], initial_texture: torch.Tensor, final_textu
         current_elev -= step_elev
     current_elev = min_elev
 
-    save_outputs_helper(cfg=cfg, texture=initial_texture, prefix="initial", outputs_dir=outputs_dir, elevs_azimuths=elevs_azimuths, renderer=renderer, target_background=target_background)
-    save_outputs_helper(cfg=cfg, texture=final_texture, prefix="final", outputs_dir=outputs_dir, elevs_azimuths=elevs_azimuths, renderer=renderer, target_background=target_background)
+    save_outputs_helper(cfg=cfg, texture=unoptimized_texture, prefix="unoptimized", outputs_dir=outputs_dir, elevs_azimuths=elevs_azimuths, renderer=renderer, target_background=target_background)
+    save_outputs_helper(cfg=cfg, texture=optimized_texture, prefix="optimized", outputs_dir=outputs_dir, elevs_azimuths=elevs_azimuths, renderer=renderer, target_background=target_background)

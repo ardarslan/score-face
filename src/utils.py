@@ -25,8 +25,6 @@ def get_cfg() -> Dict[str, Any]:
 
     # arguments with default values
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--large_texture_size", type=int, default=2048, choices=[2048], help="Width and height of large texture images. If the optimizatioon is done in image space, this is not used. Only 2048 is supported.")
-    parser.add_argument("--small_texture_size", type=int, default=512, choices=[512], help="Width and height of small texture images. If the optimization is done in image space, this is used as the texture size. Only 512 is supported.")
     parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="Device to use.")
     parser.add_argument("--batch_size", type=int, default=1, choices=[1], help="Currently only batch_size=1 is supported.")
     parser.add_argument("--num_channels", type=int, default=3, choices=[3], help="Currently only num_channels=3 is supported.")
@@ -38,10 +36,8 @@ def get_cfg() -> Dict[str, Any]:
     parser.add_argument("--initial_view", type=str, default="image", choices=["frontal", "image"], help="Initial view to optimize.")
     parser.add_argument("--min_elev", type=float, default=-10.0, help="Minimum elev used during the optimization process.")
     parser.add_argument("--max_elev", type=float, default=10.0, help="Maximum elev used during the optimization process.")
-    parser.add_argument("--step_elev", type=float, default=10.0, help="Elev step used during the optimization process.")
     parser.add_argument("--min_azimuth", type=float, default=-40.0, help="Minimum azimuth used during the optimization process.")
     parser.add_argument("--max_azimuth", type=float, default=40.0, help="Maximum azimuth used during the optimization process.")
-    parser.add_argument("--step_azimuth", type=float, default=20.0, help="Azimuth step used during the optimization process.")
 
     cfg = parser.parse_args().__dict__
     return cfg
@@ -82,7 +78,7 @@ def set_experiment_name(cfg: Dict[str, Any]) -> None:
     cfg["experiment_name"] = f"{int(time.time())}_{uuid4().hex}"
 
 
-def get_initial_textures(cfg: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tensor]:
+def get_unoptimized_textures(cfg: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tensor]:
     input_texture_path = cfg["input_texture_path"]
     small_texture_size = cfg["small_texture_size"]
     large_texture_size = cfg["large_texture_size"]
@@ -103,17 +99,17 @@ def get_initial_textures(cfg: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tenso
     texture = texture[:, :, [2, 1, 0]]
 
     if texture.shape[0] != small_texture_size:
-        initial_small_texture = cv2.resize(texture, dsize=(small_texture_size, small_texture_size), interpolation=cv2.INTER_NEAREST)
+        unoptimized_small_texture = cv2.resize(texture, dsize=(small_texture_size, small_texture_size), interpolation=cv2.INTER_NEAREST)
     else:
-        initial_small_texture = texture.copy()
-    initial_small_texture = torch.tensor(initial_small_texture, device=device, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+        unoptimized_small_texture = texture.copy()
+    unoptimized_small_texture = torch.tensor(unoptimized_small_texture, device=device, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
 
     if texture.shape[0] != large_texture_size:
-        initial_large_texture = cv2.resize(texture, dsize=(large_texture_size, large_texture_size), interpolation=cv2.INTER_NEAREST)
+        unoptimized_large_texture = cv2.resize(texture, dsize=(large_texture_size, large_texture_size), interpolation=cv2.INTER_NEAREST)
     else:
-        initial_large_texture = texture.copy()
-    initial_large_texture = torch.tensor(initial_large_texture, device=device, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
-    return initial_small_texture, initial_large_texture
+        unoptimized_large_texture = texture.copy()
+    unoptimized_large_texture = torch.tensor(unoptimized_large_texture, device=device, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+    return unoptimized_small_texture, unoptimized_large_texture
 
 
 def set_3dmm_result_paths(cfg: Dict[str, Any]) -> None:
@@ -126,13 +122,23 @@ def set_3dmm_result_paths(cfg: Dict[str, Any]) -> None:
     cfg["input_axis_angle_path"] = cfg["input_obj_path"].replace(".obj", "_axis_angle.npy")
 
 
-def set_image_size_and_checkpoint_path(cfg: Dict[str, Any]) -> None:
+def set_optimization_space_specific_parameters(cfg: Dict[str, Any]) -> None:
     if cfg["optimization_space"] == "image":
         cfg["image_size"] = 1024
         cfg["checkpoint_path"] = os.path.join(cfg["checkpoint_dir"], "checkpoint_60.pth")
+        cfg["large_texture_size"] = 2048
+        cfg["small_texture_size"] = 512
+        cfg["step_elev"] = 10.0
+        cfg["step_azimuth"] = 20.0
+        cfg["animation_duration"] = 400
     elif cfg["optimization_space"] == "texture":
         cfg["image_size"] = 256
         cfg["checkpoint_path"] = os.path.join(cfg["checkpoint_dir"], "checkpoint_48.pth")
+        cfg["large_texture_size"] = 2048
+        cfg["small_texture_size"] = 256
+        cfg["step_elev"] = 5.0
+        cfg["step_azimuth"] = 10.0
+        cfg["animation_duration"] = 200
     else:
         raise Exception(f"Not a valid optimization_space {cfg['optimization_space']}.")
 
