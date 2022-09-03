@@ -199,7 +199,7 @@ def run_single_view_optimization_in_texture_space(cfg: Dict[str, Any], current_s
 
     save_images_kwargs = {"elev": elev, "azimuth": azimuth, "dark_pixel_allowed": dark_pixel_allowed, "cfg": cfg}
 
-    for i in tqdm(list(range(sde.N))):
+    for i in range(sde.N):
         t = timesteps[i]
 
         vec_t = torch.ones(batch_size, device=device) * t
@@ -211,7 +211,7 @@ def run_single_view_optimization_in_texture_space(cfg: Dict[str, Any], current_s
         current_filled_texture_mean, current_filled_texture_std = sde.marginal_prob(initial_filled_texture, vec_t)
         current_filled_texture = current_filled_texture_mean + torch.randn_like(current_filled_texture_mean) * current_filled_texture_std[:, None, None, None]
 
-        if i % 10 == 0:
+        if i == 0:
             current_large_texture = torch.where(unoptimized_filled_texture_mask, current_filled_texture, current_unfilled_texture)
             current_face = renderer.render(texture=current_large_texture,
                                            background=background,
@@ -240,9 +240,9 @@ def run_single_view_optimization_in_texture_space(cfg: Dict[str, Any], current_s
             save_images(_images=current_face, image_type="face", iteration=i, **save_images_kwargs)
             save_images(_images=current_large_texture, image_type="texture", iteration=i, **save_images_kwargs)
 
-        if not dark_pixel_allowed:
-            pixels_to_whiten = get_pixels_to_whiten(cfg=cfg, face=current_face, unoptimized_unfilled_face_mask=unoptimized_unfilled_face_mask, background_mask=background_mask)
-            current_large_texture = whiten_large_texture(cfg=cfg, pixel_uvs=pixel_uvs, pixels_to_whiten=pixels_to_whiten, large_texture=current_large_texture)
+    if not dark_pixel_allowed:
+        pixels_to_whiten = get_pixels_to_whiten(cfg=cfg, face=current_face, unoptimized_unfilled_face_mask=unoptimized_unfilled_face_mask, background_mask=background_mask)
+        current_large_texture = whiten_large_texture(cfg=cfg, pixel_uvs=pixel_uvs, pixels_to_whiten=pixels_to_whiten, large_texture=current_large_texture)
 
     current_small_texture = update_small_texture_using_large_texture(cfg=cfg, pixel_uvs=pixel_uvs, small_texture=current_small_texture, large_texture=current_large_texture)
     current_large_texture = update_large_texture_by_upsampling_small_texture(cfg=cfg, small_texture=current_small_texture, unoptimized_large_texture=unoptimized_large_texture, unoptimized_filled_texture_mask=unoptimized_filled_texture_mask)
