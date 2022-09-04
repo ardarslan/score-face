@@ -27,3 +27,4 @@ To do optimization in the texture space:
 ```
 python3 main.py --input_obj_path INPUT_OBJ_PATH --optimization_space texture --order_views true --two_rounds true --num_corrector_steps 6 --snr 0.015
 ```
+
