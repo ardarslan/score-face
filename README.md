@@ -27,3 +27,15 @@ To do optimization in the texture space:
 ```
 python3 main.py --input_obj_path INPUT_OBJ_PATH --optimization_space texture --order_views true --two_rounds true --num_corrector_steps 6 --snr 0.015
 ```
+
+### Results
+
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/image_space/33673/unoptimized_animation.gif)
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/image_space/33673/optimized_animation.gif)
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/image_space/58232/unoptimized_animation.gif)
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/image_space/58232/optimized_animation.gif)
+
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/texture_space/33673/unoptimized_animation.gif)
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/texture_space/33673/optimized_animation.gif)
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/texture_space/58232/unoptimized_animation.gif)
+![til](https://raw.githubusercontent.com/ardarslan/score-face/animations/texture_space/58232/optimized_animation.gif)
