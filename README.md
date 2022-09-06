@@ -30,7 +30,7 @@ python3 main.py --input_obj_path INPUT_OBJ_PATH --optimization_space texture --o
 
 ### Results
 
-#### Image Space
+#### Optimization in the Image Space
 
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188681577-df15b06a-e0b5-4d80-a577-13117dabd78e.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188681601-b0928a26-8608-46be-b041-a5d98a1bcc39.gif)
 
@@ -38,7 +38,7 @@ python3 main.py --input_obj_path INPUT_OBJ_PATH --optimization_space texture --o
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188681632-567cacd5-3b2f-4585-a922-66951db6a00d.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188681653-37b81f91-4f25-4353-ac85-191bd1674d50.gif)
 
 
-#### Texture Space
+#### Optimization in the Texture Space
 
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188672533-317b7ddf-0a62-48e4-bd75-73270dd8e7b3.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188672548-aa3096cc-2681-4d52-95d5-959d72f60ade.gif)
 
