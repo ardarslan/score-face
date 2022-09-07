@@ -50,6 +50,9 @@ Optimization in the Texture Space
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188672576-1167d3dd-8c0a-4478-9f42-58ea60d19915.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188672586-93e11d05-a68f-4324-a36d-04d6d9378692.gif)
 
 
+![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188965520-ddb0beb9-fec0-48ab-9334-4536c4461fac.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188965538-97d3209c-a40d-448b-bc94-c70887eb59c5.gif)
+
+
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188964154-cb8a2ab1-aa7b-458b-af2c-140999e9e854.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188964176-1ab2c2b2-67f2-441f-9f28-457d91320e0c.gif)
 
 Note: The code under the directory https://github.com/ardarslan/score-face/tree/master/src/score_sde was adapted from https://github.com/yang-song/score_sde_pytorch.
