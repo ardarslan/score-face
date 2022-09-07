@@ -44,3 +44,6 @@ Optimization in the Texture Space
 
 
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188672576-1167d3dd-8c0a-4478-9f42-58ea60d19915.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188672586-93e11d05-a68f-4324-a36d-04d6d9378692.gif)
+
+
+Note: The code under the directory https://github.com/ardarslan/score-face/tree/master/src/score_sde was adapted from https://github.com/yang-song/score_sde_pytorch.
