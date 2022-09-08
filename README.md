@@ -40,6 +40,7 @@ Optimization in the Image Space
 
 ![unoptimized_animation](https://user-images.githubusercontent.com/19363284/188964020-b18d32e6-c6af-44c3-a213-7fa3fa2aa1f9.gif) ![optimized_animation](https://user-images.githubusercontent.com/19363284/188963990-7608c7d3-4063-4d28-9ce2-62010df5429f.gif)
 
+![ezgif-3-3d001e314f](https://user-images.githubusercontent.com/19363284/189201636-8591b98a-c808-4064-a0a8-facbdfd7a901.gif) ![ezgif-3-bbc31152a3](https://user-images.githubusercontent.com/19363284/189201656-e83933ef-8e84-4055-bd0c-ff84abf0aaf2.gif)
 
 
 Optimization in the Texture Space
